@@ -5,8 +5,10 @@ Platform configuration. Values are read from .env automatically.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -26,6 +28,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ── Database ─────────────────────────────────────────────────
+    # A full connection string (e.g. Railway's auto-provided DATABASE_URL) takes
+    # precedence over the individual DB_* parts below when set.
+    DB_URL: str = Field(default="", validation_alias="DATABASE_URL")
     DB_ENGINE: str = "postgresql"          # "postgresql" or "sqlite"
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
@@ -71,8 +76,26 @@ class Settings(BaseSettings):
     def allowed_admin_emails(self) -> set[str]:
         return {e.strip().lower() for e in self.ADMIN_WHITELIST.split(",") if e.strip()}
 
+    def _url_with_driver(self, driver: str) -> str | None:
+        """Normalise a provided DATABASE_URL to use the given driver (asyncpg /
+        psycopg2) and drop query params that those drivers don't accept."""
+        raw = (self.DB_URL or "").strip()
+        if not raw:
+            return None
+        raw = raw.split("?", 1)[0]                       # drop ?sslmode=... etc.
+        if raw.startswith("postgres://"):
+            raw = "postgresql://" + raw[len("postgres://"):]
+        if raw.startswith("postgresql+"):
+            raw = re.sub(r"^postgresql\+[a-z0-9]+://", "postgresql://", raw)
+        if raw.startswith("postgresql://"):
+            return "postgresql+" + driver + "://" + raw[len("postgresql://"):]
+        return raw                                       # some other scheme — use as-is
+
     @property
     def DATABASE_URL(self) -> str:
+        override = self._url_with_driver("asyncpg")
+        if override:
+            return override
         engine = self.DB_ENGINE.lower()
         if engine in ("postgresql", "postgres"):
             return (f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
@@ -82,6 +105,9 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL_SYNC(self) -> str:
+        override = self._url_with_driver("psycopg2")
+        if override:
+            return override
         engine = self.DB_ENGINE.lower()
         if engine in ("postgresql", "postgres"):
             return (f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}"

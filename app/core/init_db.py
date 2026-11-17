@@ -45,6 +45,17 @@ async def init_db() -> None:
 
     await _seed_super_admin()
 
+    # Any run still marked RUNNING at startup is an orphan (its task died with the
+    # previous process) — mark it FAILED so it doesn't show 'running' forever.
+    try:
+        from app.modules.countries.reader import fail_stale_runs
+        async with AsyncSessionLocal() as db:
+            n = await fail_stale_runs(db, older_than_minutes=0)
+        if n:
+            logger.info("Cleared %s orphaned reader run(s) from a previous restart.", n)
+    except Exception as exc:
+        logger.warning("Could not clear orphaned runs: %s", exc)
+
     async with AsyncSessionLocal() as session:
         count = (await session.execute(select(func.count()).select_from(Country))).scalar_one()
 

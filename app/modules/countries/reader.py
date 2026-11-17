@@ -21,11 +21,11 @@ import hashlib
 import html as _html
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin, urlsplit
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.countries import ai_extract, keystore
@@ -476,16 +476,39 @@ async def _execute_run(run_id: str, countries: list[str] | None, use_ai: bool | 
         _run_active = False
 
 
+async def fail_stale_runs(db: AsyncSession, older_than_minutes: int = 15) -> int:
+    """Mark RUNNING runs that never finished (e.g. the server restarted mid-read)
+    as FAILED, so they stop showing 'running' forever and stop blocking new reads."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+    stale = (await db.execute(select(ReaderRun).where(
+        ReaderRun.status == "RUNNING", ReaderRun.started_at < cutoff))).scalars().all()
+    for r in stale:
+        r.status = "FAILED"
+        r.finished_at = datetime.now(timezone.utc)
+        r.message = (r.message or "") + " (stopped: interrupted or timed out)"
+    if stale:
+        await db.commit()
+    return len(stale)
+
+
 async def start_background_read(db: AsyncSession, countries: list[str] | None = None,
                                 use_ai: bool | None = None, max_pages: int | None = None,
                                 discover: bool = False) -> dict:
     """Create the run row, launch the read in the background, and return at once."""
     global _run_active
     label = ",".join(c.strip().upper() for c in countries if c.strip()) if countries else "ALL"
-    if _run_active:
+    # clear out orphaned runs from earlier crashes/restarts first
+    await fail_stale_runs(db)
+    # a genuinely-active run started recently still blocks a second one
+    recent = (await db.execute(select(func.count(ReaderRun.id)).where(
+        ReaderRun.status == "RUNNING"))).scalar()
+    if _run_active and recent:
         return {"run_id": "", "countries": label, "checked": 0, "alive": 0, "broken": 0,
                 "programs_read": 0, "changes": 0, "used_ai": False,
                 "message": "A read is already running — please wait for it to finish."}
+    # guard stuck on but nothing actually running (e.g. after a restart) -> clear it
+    if _run_active and not recent:
+        _run_active = False
     run = ReaderRun(countries=label, status="RUNNING")
     db.add(run)
     await db.commit()

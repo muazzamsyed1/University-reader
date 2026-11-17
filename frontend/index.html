@@ -1,0 +1,1185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Admissions Reader</title>
+<style>
+  :root{
+    --accent:#2f6bff; --accent-ink:#1b50d6; --accent-soft:#eaf0ff;
+    --bg:#eef2fb; --panel:#ffffff; --ink:#0f1b33; --muted:#5b6b86;
+    --border:#e3e9f5; --ok:#0f8a4d; --ok-soft:#e5f6ec; --warn:#b26a00;
+    --warn-soft:#fef3e2; --bad:#c62828; --bad-soft:#fdecec; --shadow:0 6px 24px rgba(23,48,98,.08);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+  a{color:var(--accent-ink);text-decoration:none}
+  button{font-family:inherit;cursor:pointer}
+  .hidden{display:none !important}
+
+  /* ---- Login ---- */
+  #login{position:fixed;inset:0;background:linear-gradient(135deg,#2f6bff,#1b3a8c);
+         display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .login-card{background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);
+              width:100%;max-width:400px;padding:34px}
+  .login-card h1{margin:0 0 4px;font-size:21px}
+  .login-card p{margin:0 0 22px;color:var(--muted)}
+  .brand-badge{width:46px;height:46px;border-radius:12px;background:var(--accent-soft);
+               display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:var(--accent-ink)}
+  label{display:block;font-weight:600;margin:14px 0 6px;font-size:13px}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border);
+         border-radius:10px;font-size:14px;background:#fff;color:var(--ink)}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
+         box-shadow:0 0 0 3px var(--accent-soft)}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 16px;
+       font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{background:var(--accent-ink)}
+  .btn.block{width:100%;justify-content:center;padding:12px;margin-top:20px}
+  .btn.ghost{background:#fff;color:var(--accent-ink);border:1px solid var(--border)}
+  .btn.ghost:hover{background:var(--accent-soft)}
+  .btn.sm{padding:6px 10px;font-size:12.5px;border-radius:8px}
+  .btn.ok{background:var(--ok)} .btn.ok:hover{filter:brightness(.92)}
+  .btn.bad{background:var(--bad)} .btn.bad:hover{filter:brightness(.92)}
+  .err{color:var(--bad);margin-top:12px;font-size:13px;min-height:16px}
+
+  /* ---- Shell ---- */
+  #app{display:flex;min-height:100vh}
+  #side{width:224px;background:var(--panel);border-right:1px solid var(--border);
+        padding:18px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:4px}
+  .logo{display:flex;align-items:center;gap:10px;padding:6px 10px 16px;font-weight:700;font-size:16px}
+  .logo .brand-badge{width:34px;height:34px;margin:0;border-radius:9px}
+  .nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;
+       color:var(--muted);font-weight:600;border:none;background:none;width:100%;text-align:left;font-size:13.5px}
+  .nav:hover{background:var(--accent-soft);color:var(--accent-ink)}
+  .nav.active{background:var(--accent);color:#fff}
+  .nav svg{width:18px;height:18px;flex:none}
+  .nav .badge{margin-left:auto;background:var(--bad);color:#fff;border-radius:20px;
+       font-size:11px;padding:1px 7px;font-weight:700}
+  .nav.active .badge{background:#fff;color:var(--bad)}
+  .side-foot{margin-top:auto;padding:10px;border-top:1px solid var(--border);font-size:12.5px;color:var(--muted)}
+  .side-foot b{color:var(--ink);display:block;font-size:13px;word-break:break-all}
+
+  #main{flex:1;min-width:0;padding:22px 26px 80px}
+  .page-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+  .page-head h2{margin:0;font-size:20px}
+  .page-head .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .toolbar input,.toolbar select{width:auto;min-width:150px}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:22px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+        padding:16px 18px;box-shadow:var(--shadow)}
+  .card .k{color:var(--muted);font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+  .card .v{font-size:26px;font-weight:700;margin-top:6px}
+  .card .v small{font-size:13px;color:var(--muted);font-weight:600}
+
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+         box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px}
+  .panel-h{padding:14px 18px;border-bottom:1px solid var(--border);font-weight:700;
+           display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .panel-b{padding:16px 18px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;font-weight:700;
+     position:sticky;top:0;background:var(--panel)}
+  tr:hover td{background:#fafcff}
+  .tscroll{max-height:62vh;overflow:auto}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:700}
+  .pill.open{background:var(--ok-soft);color:var(--ok)}
+  .pill.close{background:var(--bad-soft);color:var(--bad)}
+  .pill.unk{background:#eef1f7;color:var(--muted)}
+  .pill.master{background:var(--accent-soft);color:var(--accent-ink)}
+  .pill.bachelor{background:#f0ecfb;color:#6b3fd6}
+  .tag{display:inline-block;background:#eef1f7;color:var(--muted);border-radius:6px;padding:1px 7px;font-size:11.5px;font-weight:600}
+  .muted{color:var(--muted)}
+  .right{text-align:right}
+  .nowrap{white-space:nowrap}
+  .ico-btn{border:1px solid var(--border);background:#fff;border-radius:8px;width:30px;height:30px;
+           display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+  .ico-btn:hover{color:var(--accent-ink);border-color:var(--accent);background:var(--accent-soft)}
+  .ico-btn.danger:hover{color:var(--bad);border-color:var(--bad);background:var(--bad-soft)}
+  .ico-btn svg{width:15px;height:15px}
+  .tabs{display:inline-flex;background:#eef1f7;border-radius:10px;padding:3px}
+  .tab{border:none;background:none;padding:7px 14px;border-radius:8px;font-weight:600;color:var(--muted);font-size:13px}
+  .tab.active{background:#fff;color:var(--accent-ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  tr.grouprow td{background:#f3f6fd;font-size:12.5px;border-top:2px solid var(--border);position:sticky}
+  tr.grouprow:hover td{background:#f3f6fd}
+  h3{font-size:14.5px;color:var(--ink)}
+  .diff{background:var(--warn-soft)}
+  .diff td{border-color:#f3e2c6}
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:4px 12px}
+  .kv .k{color:var(--muted);font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  /* ---- Modal ---- */
+  #modal{position:fixed;inset:0;background:rgba(15,27,51,.45);display:flex;align-items:center;
+         justify-content:center;z-index:70;padding:20px}
+  .modal-card{background:#fff;border-radius:16px;width:100%;max-width:560px;max-height:88vh;
+              overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .modal-h{padding:16px 20px;border-bottom:1px solid var(--border);font-weight:700;font-size:16px;
+           display:flex;justify-content:space-between;align-items:center}
+  .modal-b{padding:18px 20px}
+  .modal-f{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+
+  /* ---- Toast ---- */
+  #toasts{position:fixed;right:18px;bottom:18px;z-index:120;display:flex;flex-direction:column;gap:10px}
+  .toast{background:#0f1b33;color:#fff;padding:12px 16px;border-radius:10px;box-shadow:var(--shadow);
+         font-size:13.5px;max-width:340px;animation:slide .25s ease}
+  .toast.ok{background:var(--ok)} .toast.bad{background:var(--bad)}
+  @keyframes slide{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+
+  /* ---- Chatbot ---- */
+  #chatBtn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;
+           background:var(--accent);color:#fff;border:none;box-shadow:var(--shadow);z-index:60;
+           display:flex;align-items:center;justify-content:center}
+  #chatBtn:hover{background:var(--accent-ink)}
+  #chatBtn svg{width:24px;height:24px}
+  #chat{position:fixed;right:20px;bottom:88px;width:360px;max-width:calc(100vw - 40px);height:460px;
+        background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);
+        z-index:60;display:flex;flex-direction:column;overflow:hidden}
+  .chat-h{background:var(--accent);color:#fff;padding:13px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+  .chat-body{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#f6f8fe}
+  .msg{padding:9px 13px;border-radius:12px;max-width:85%;white-space:pre-wrap;font-size:13px;line-height:1.5}
+  .msg.bot{background:#fff;border:1px solid var(--border);align-self:flex-start}
+  .msg.me{background:var(--accent);color:#fff;align-self:flex-end}
+  .chat-in{display:flex;gap:8px;padding:10px;border-top:1px solid var(--border)}
+  .chat-in input{flex:1}
+  @media(max-width:820px){
+    #side{position:fixed;left:-240px;transition:left .2s;z-index:80}
+    #side.open{left:0}
+    #main{padding:16px}
+    .grid2{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login">
+  <form class="login-card" onsubmit="doLogin(event)">
+    <div class="brand-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 3 2.5 6 2.5s6-1.5 6-2.5v-5"/></svg>
+    </div>
+    <h1>Admissions Reader</h1>
+    <p>Sign in to the admin portal</p>
+    <label>Email</label>
+    <input id="loginEmail" type="email" autocomplete="username" placeholder="you@gmail.com" required />
+    <label>Password</label>
+    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="password" required />
+    <button class="btn block" type="submit">Sign in</button>
+    <div class="err" id="loginErr"></div>
+    <p class="muted" style="text-align:center;margin-top:10px;font-size:12px">Build 2026-11-16-B · <span id="buildCountries">?</span> countries loaded</p>
+  </form>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <aside id="side">
+    <div class="logo">
+      <span class="brand-badge" style="width:34px;height:34px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 3 2.5 6 2.5s6-1.5 6-2.5v-5"/></svg>
+      </span>
+      <span>Admissions</span>
+    </div>
+    <button class="nav active" data-view="overview" onclick="go('overview')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Overview</button>
+    <button class="nav" data-view="programs" onclick="go('programs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Programmes</button>
+    <button class="nav" data-view="universities" onclick="go('universities')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+      Universities</button>
+    <button class="nav" data-view="reader" onclick="go('reader')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><path d="M21 3v6h-6"/></svg>
+      Reader</button>
+    <button class="nav" data-view="changes" onclick="go('changes')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+      Changes <span class="badge hidden" id="chgBadge">0</span></button>
+    <button class="nav" data-view="verify" onclick="go('verify')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Verify</button>
+    <button class="nav super-only" data-view="admins" onclick="go('admins')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Admins</button>
+    <button class="nav super-only" data-view="apikeys" onclick="go('apikeys')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 0-7 7 5 5 0 0 0 7-7zm0 0L15 8m0 0l3 3 3-3-3-3"/></svg>
+      API Keys</button>
+    <button class="nav super-only" data-view="schedule" onclick="go('schedule')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      Schedule</button>
+    <div class="side-foot">
+      <b id="whoEmail">—</b>
+      <span id="whoRole" class="muted"></span>
+      <span class="muted" style="display:block;font-size:11px;margin-top:4px">Build 2026-11-16-B · <span id="sideCountries">?</span> countries</span>
+      <button class="btn ghost sm" style="margin-top:8px;width:100%;justify-content:center" onclick="logout()">Sign out</button>
+    </div>
+  </aside>
+
+  <main id="main"></main>
+</div>
+
+<!-- chatbot -->
+<button id="chatBtn" class="hidden" onclick="toggleChat()" title="Ask the assistant">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</button>
+<div id="chat" class="hidden">
+  <div class="chat-h"><span>Admissions Assistant</span><button class="ico-btn" style="background:none;border:none;color:#fff" onclick="toggleChat()">&times;</button></div>
+  <div class="chat-body" id="chatBody"></div>
+  <form class="chat-in" onsubmit="sendChat(event)">
+    <input id="chatInput" placeholder="Ask about a university…" autocomplete="off" />
+    <button class="btn" type="submit">Send</button>
+  </form>
+</div>
+
+<div id="modal" class="hidden"></div>
+<div id="toasts"></div>
+
+<!-- Server injects the real country list here so the dropdowns are populated
+     even before any API call runs. Replaced at serve time; [] if unavailable. -->
+<script>window.__COUNTRIES__ = /*__COUNTRIES_JSON__*/[];</script>
+
+<script>
+// ============ state & helpers ============
+const S = { token:null, me:null, countries:(window.__COUNTRIES__||[]).slice(), view:'overview',
+            progDegree:'', progCountry:'', progStatus:'', progQ:'', uniCountry:'', uniQ:'',
+            chStatus:'PENDING', chCountry:'' };
+try{ var _bc=document.getElementById('buildCountries');
+     if(_bc) _bc.textContent=(window.__COUNTRIES__||[]).length; }catch(e){}
+
+function tok(){ return localStorage.getItem('ar_token'); }
+function setAuth(t, me){ localStorage.setItem('ar_token', t); localStorage.setItem('ar_me', JSON.stringify(me)); S.token=t; S.me=me; }
+function clearAuth(){ localStorage.removeItem('ar_token'); localStorage.removeItem('ar_me'); S.token=null; S.me=null; }
+
+async function api(path, opts){
+  opts = opts||{};
+  opts.headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
+  if(tok()) opts.headers['Authorization'] = 'Bearer '+tok();
+  const r = await fetch('/api/v1'+path, opts);
+  if(r.status===401){ clearAuth(); showLogin('Session expired — please sign in again.'); throw new Error('Not authenticated'); }
+  const ct = r.headers.get('content-type')||'';
+  const data = ct.indexOf('json')>=0 ? await r.json() : await r.text();
+  if(!r.ok){ throw new Error((data && data.detail) ? data.detail : ('Error '+r.status)); }
+  return data;
+}
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function toast(msg, kind){ const t=document.createElement('div'); t.className='toast '+(kind||''); t.textContent=msg;
+  document.getElementById('toasts').appendChild(t); setTimeout(function(){t.remove();},3800); }
+function isSuper(){ return S.me && S.me.is_super; }
+
+// ============ login ============
+function showLogin(msg){ document.getElementById('app').classList.add('hidden');
+  document.getElementById('chatBtn').classList.add('hidden');
+  document.getElementById('login').classList.remove('hidden');
+  document.getElementById('loginErr').textContent = msg||''; }
+
+async function doLogin(e){
+  e.preventDefault();
+  const email=document.getElementById('loginEmail').value.trim();
+  const password=document.getElementById('loginPassword').value;
+  document.getElementById('loginErr').textContent='';
+  try{
+    const r = await fetch('/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:email,password:password})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail||'Login failed');
+    setAuth(d.access_token, {email:d.email, role:d.role, full_name:d.full_name,
+                             countries:d.countries, is_super:d.role==='SUPER_ADMIN'});
+    await boot();
+  }catch(err){ document.getElementById('loginErr').textContent = err.message; }
+}
+function logout(){ clearAuth(); showLogin(); }
+
+async function boot(){
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('chatBtn').classList.remove('hidden');
+  try{ var _sc=document.getElementById('sideCountries'); if(_sc) _sc.textContent=S.countries.length; }catch(e){}
+  document.getElementById('whoEmail').textContent = S.me.email;
+  document.getElementById('whoRole').textContent = S.me.is_super ? 'Super admin'
+      : 'Country admin · '+(S.me.countries||[]).join(', ');
+  document.querySelectorAll('.super-only').forEach(function(el){ el.classList.toggle('hidden', !isSuper()); });
+  await loadCountries();
+  go('overview');
+  refreshBadge();
+}
+async function loadCountries(){
+  try{
+    const c = await api('/countries');
+    if(Array.isArray(c) && c.length){ S.countries=c; return S.countries; }
+  }catch(e){ /* fall through to fallback */ }
+  // Fallback: derive the country list from the universities the user can see,
+  // so the dropdowns always offer the real countries even if /countries fails.
+  try{
+    const us = await api('/universities');
+    const seen={}; const out=[];
+    (us||[]).forEach(function(u){
+      const code=u.country_code; if(!code||seen[code]) return; seen[code]=1;
+      out.push({id:code, code:code, name:u.country_name||code,
+                university_count:0, master_count:0, bachelor_count:0, program_count:0});
+    });
+    out.sort(function(a,b){ return a.name.localeCompare(b.name); });
+    S.countries = out;
+  }catch(e){
+    S.countries=[];
+    toast('Could not load countries — '+(e.message||'please refresh'),'bad');
+  }
+  return S.countries;
+}
+async function ensureCountries(){ if(!S.countries||!S.countries.length) await loadCountries(); return S.countries; }
+function countryWarn(){
+  if(S.countries&&S.countries.length) return '';
+  return '<div class="panel" style="border-color:var(--bad)"><div class="panel-b" style="color:var(--bad)">'+
+    '⚠ The country list did not load, so the dropdown only shows “All countries”. '+
+    'This is almost always an old cached page. '+
+    '<button class="btn sm" onclick="retryCountries()">Retry now</button></div></div>';
+}
+async function retryCountries(){ await loadCountries();
+  if(S.countries.length) toast('Loaded '+S.countries.length+' countries','ok');
+  else toast('Still could not load countries — reopen in an incognito window','bad');
+  go(S.view); }
+async function refreshBadge(){
+  try{ const s = await api('/stats');
+    const b=document.getElementById('chgBadge');
+    if(s.pending_changes>0){ b.textContent=s.pending_changes; b.classList.remove('hidden'); }
+    else b.classList.add('hidden');
+  }catch(e){}
+}
+
+// ============ navigation ============
+function go(view){
+  S.view=view;
+  document.querySelectorAll('.nav').forEach(function(n){ n.classList.toggle('active', n.dataset.view===view); });
+  const m=document.getElementById('main'); m.innerHTML='<div class="empty">Loading…</div>';
+  ({overview:viewOverview, programs:viewPrograms, universities:viewUniversities,
+    reader:viewReader, changes:viewChanges, verify:viewVerify, admins:viewAdmins,
+    apikeys:viewApiKeys, schedule:viewSchedule}[view]||viewOverview)();
+}
+function countryOptions(sel){
+  return '<option value="">All countries</option>'+S.countries.map(function(c){ return
+    '<option value="'+c.code+'" '+(sel===c.code?'selected':'')+'>'+esc(c.name)+' ('+c.code+')</option>'; }).join('');
+}
+// Big, obvious country picker as buttons (works even if the <select> is awkward).
+function countryPills(current, pickFn){
+  const all='<button class="btn '+(current?'ghost':'')+' sm" onclick="'+pickFn+'(\'\')">All countries</button>';
+  const items=(S.countries||[]).map(function(c){
+    return '<button class="btn '+(current===c.code?'':'ghost')+' sm" onclick="'+pickFn+'(\''+c.code+'\')">'+
+      esc(c.name)+'</button>'; }).join('');
+  const warn=(S.countries&&S.countries.length)?'':
+    '<span class="muted">No countries loaded — <a href="#" onclick="retryCountries();return false;">retry</a></span>';
+  return '<div class="toolbar" style="gap:8px;flex-wrap:wrap;margin:0 0 14px">'+
+         '<span class="muted" style="align-self:center">Show:</span>'+all+items+warn+'</div>';
+}
+function pickProgCountry(code){ S.progCountry=code; viewPrograms(); }
+function pickUniCountry(code){ S.uniCountry=code; viewUniversities(); }
+
+// ============ OVERVIEW ============
+async function viewOverview(){
+  const s = await api('/stats');
+  const cs = S.countries;
+  document.getElementById('main').innerHTML =
+    '<div class="page-head"><div><h2>Overview</h2>'+
+      '<div class="sub">'+(isSuper()?'All countries':'Your assigned countries')+'</div></div></div>'+
+    '<div class="cards">'+
+      card('Countries', s.countries)+card('Universities', s.universities)+
+      card("Master's", s.master_programs)+card("Bachelor's", s.bachelor_programs)+
+      card('Links', s.links)+card('Broken links', s.links_broken)+
+      card('Pending changes', s.pending_changes)+
+    '</div>'+
+    '<div class="panel"><div class="panel-h">By country</div>'+
+      '<table><thead><tr><th>Country</th><th class="right">Universities</th>'+
+        '<th class="right">Master\'s</th><th class="right">Bachelor\'s</th></tr></thead>'+
+      '<tbody>'+(cs.map(function(c){ return '<tr><td><b>'+esc(c.name)+'</b> <span class="tag">'+c.code+'</span></td>'+
+        '<td class="right">'+c.university_count+'</td><td class="right">'+c.master_count+'</td>'+
+        '<td class="right">'+c.bachelor_count+'</td></tr>'; }).join('')||'<tr><td colspan=4 class="empty">No data</td></tr>')+
+      '</tbody></table></div>';
+}
+function card(k,v){ return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
+
+// ============ PROGRAMMES ============
+async function viewPrograms(){
+  await ensureCountries();
+  const m=document.getElementById('main');
+  m.innerHTML =
+    '<div class="page-head"><div><h2>Programmes</h2><div class="sub">Admission criteria per programme</div></div></div>'+
+    countryPills(S.progCountry, 'pickProgCountry')+
+    '<div class="toolbar" style="margin-bottom:14px">'+
+      '<div class="tabs">'+
+        '<button class="tab '+(S.progDegree===''?'active':'')+'" onclick="setDeg(\'\')">All</button>'+
+        '<button class="tab '+(S.progDegree==='MASTER'?'active':'')+'" onclick="setDeg(\'MASTER\')">Master\'s</button>'+
+        '<button class="tab '+(S.progDegree==='BACHELOR'?'active':'')+'" onclick="setDeg(\'BACHELOR\')">Bachelor\'s</button>'+
+      '</div>'+
+      '<select id="pCountry" onchange="S.progCountry=this.value;loadPrograms()">'+countryOptions(S.progCountry)+'</select>'+
+      '<select id="pStatus" onchange="S.progStatus=this.value;loadPrograms()">'+
+        '<option value="">Any status</option>'+
+        '<option value="OPEN" '+(S.progStatus==='OPEN'?'selected':'')+'>Open</option>'+
+        '<option value="CLOSE" '+(S.progStatus==='CLOSE'?'selected':'')+'>Closed</option></select>'+
+      '<input id="pQ" placeholder="Search programme / university" value="'+esc(S.progQ)+'"'+
+             ' oninput="S.progQ=this.value" onkeydown="if(event.key===\'Enter\')loadPrograms()" />'+
+      '<button class="btn" onclick="loadPrograms()">Search</button>'+
+    '</div>'+
+    countryWarn()+
+    '<div class="sub" id="pCount" style="margin:0 2px 10px">—</div>'+
+    '<div id="pWrap"><div class="panel"><div class="panel-b empty">Loading…</div></div></div>';
+  loadPrograms();
+}
+function setDeg(d){ S.progDegree=d; viewPrograms(); }
+async function loadPrograms(){
+  const wrap=document.getElementById('pWrap');
+  if(wrap) wrap.innerHTML='<div class="panel"><div class="panel-b empty">Loading…</div></div>';
+  const qs = new URLSearchParams({limit:'2000'});
+  if(S.progDegree) qs.set('degree',S.progDegree);
+  if(S.progCountry) qs.set('country',S.progCountry);
+  if(S.progStatus) qs.set('status',S.progStatus);
+  if(S.progQ) qs.set('q',S.progQ);
+  const rows = await api('/programs?'+qs.toString());
+  S.progById={}; rows.forEach(function(p){ S.progById[p.id]=p; });
+
+  // group programmes by university, preserving API order (already sorted by uni name)
+  const groups=[]; const idx={};
+  rows.forEach(function(p){ const k=p.university_id;
+    if(idx[k]===undefined){ idx[k]=groups.length;
+      groups.push({id:k, name:p.university_name, cc:p.country_code, cn:p.country_name, progs:[]}); }
+    groups[idx[k]].progs.push(p); });
+
+  // overview for the current filter
+  const mTot=rows.filter(function(p){return (p.degree_level||'').toUpperCase()==='MASTER';}).length;
+  const bTot=rows.length-mTot;
+  const openTot=rows.filter(function(p){return (p.status||'').toUpperCase()==='OPEN';}).length;
+  const scopeName = S.progCountry
+    ? ((S.countries.find(function(c){return c.code===S.progCountry;})||{}).name||S.progCountry)
+    : 'All countries';
+  const overview='<div class="cards" style="margin-bottom:14px">'+
+    card('Scope', esc(scopeName))+card('Universities', groups.length)+
+    card("Master's", mTot)+card("Bachelor's", bTot)+card('Open now', openTot)+
+    '</div>';
+
+  function progTable(progs){
+    return '<div class="tscroll"><table><thead><tr>'+
+      '<th>Programme</th><th>Degree</th><th>Status</th><th>Opens</th><th>Deadline</th>'+
+      '<th>Fee</th><th>CGPA</th><th>English</th><th>Link</th><th></th></tr></thead><tbody>'+
+      progs.map(function(p){ return '<tr>'+
+        '<td><b>'+esc(p.name)+'</b></td>'+
+        '<td>'+degPill(p.degree_level)+'</td>'+
+        '<td>'+statusPill(p.status)+'</td>'+
+        '<td>'+(esc(p.application_opening_date)||'<span class=muted>—</span>')+'</td>'+
+        '<td>'+(esc(p.deadline)||'<span class=muted>—</span>')+'</td>'+
+        '<td>'+(esc(p.apply_fee)||'<span class=muted>—</span>')+'</td>'+
+        '<td>'+(esc(trim(p.cgpa_required,40))||'<span class=muted>—</span>')+'</td>'+
+        '<td>'+(esc(trim(p.english_required,40))||'<span class=muted>—</span>')+'</td>'+
+        '<td>'+(p.apply_link?'<a href="'+esc(p.apply_link)+'" target="_blank" rel="noopener">open</a>':'<span class=muted>—</span>')+'</td>'+
+        '<td class="nowrap">'+
+          '<button class="ico-btn" title="Edit" onclick="editProg(\''+p.id+'\')">'+icoEdit()+'</button> '+
+          '<button class="ico-btn danger" title="Delete" onclick="delProgram(\''+p.id+'\')">'+icoTrash()+'</button>'+
+        '</td></tr>'; }).join('')+
+      '</tbody></table></div>';
+  }
+  function uniPanel(g){
+    const m=g.progs.filter(function(p){return (p.degree_level||'').toUpperCase()==='MASTER';}).length;
+    const b=g.progs.length-m;
+    return '<div class="panel" style="margin-bottom:12px"><div class="panel-h">'+
+      '<span><b>'+esc(g.name)+'</b> <span class="tag">'+esc(g.cc||'')+'</span></span>'+
+      '<span class="nowrap"><span class="muted">'+m+" master's · "+b+" bachelor's</span> "+
+        '<button class="btn ghost sm" onclick="openUniversity(\''+g.id+'\')">Open university</button></span></div>'+
+      progTable(g.progs)+'</div>';
+  }
+
+  const body = groups.length
+    ? groups.map(uniPanel).join('')
+    : '<div class="panel"><div class="panel-b empty">No programmes match this filter.</div></div>';
+  if(wrap) wrap.innerHTML = overview + body;
+  const pc=document.getElementById('pCount');
+  if(pc) pc.textContent = rows.length+' programme(s) across '+groups.length+' university(ies)';
+}
+function degPill(d){ d=(d||'').toUpperCase(); return d==='BACHELOR'?'<span class="pill bachelor">Bachelor</span>':'<span class="pill master">Master</span>'; }
+function statusPill(s){ s=(s||'').toUpperCase(); if(s==='OPEN')return'<span class="pill open">Open</span>';
+  if(s==='CLOSE'||s==='CLOSED')return'<span class="pill close">Closed</span>'; return'<span class="pill unk">—</span>'; }
+function trim(s,n){ s=s==null?'':String(s); return s.length>n?s.slice(0,n)+'…':s; }
+function js(o){ return JSON.stringify(o).replace(/'/g,'&#39;'); }
+
+function editProgram(p){
+  openModal('Edit programme',
+    '<div class="grid2">'+
+      '<div><label>Programme name</label><input id="f_name" value="'+esc(p.name)+'"></div>'+
+      '<div><label>Degree</label><select id="f_degree">'+
+        '<option value="MASTER" '+(p.degree_level==='MASTER'?'selected':'')+'>Master\'s</option>'+
+        '<option value="BACHELOR" '+(p.degree_level==='BACHELOR'?'selected':'')+'>Bachelor\'s</option></select></div>'+
+      '<div><label>Status</label><select id="f_status">'+
+        '<option value="" '+(!p.status?'selected':'')+'>—</option>'+
+        '<option value="OPEN" '+(p.status==='OPEN'?'selected':'')+'>Open</option>'+
+        '<option value="CLOSE" '+(p.status==='CLOSE'?'selected':'')+'>Closed</option></select></div>'+
+      '<div><label>Application opens</label><input id="f_open" value="'+esc(p.application_opening_date)+'"></div>'+
+      '<div><label>Deadline</label><input id="f_dead" value="'+esc(p.deadline)+'"></div>'+
+      '<div><label>Application fee</label><input id="f_fee" value="'+esc(p.apply_fee)+'"></div>'+
+      '<div style="grid-column:1/3"><label>Apply / portal link</label><input id="f_link" value="'+esc(p.apply_link)+'"></div>'+
+      '<div style="grid-column:1/3"><label>CGPA required</label><input id="f_cgpa" value="'+esc(p.cgpa_required)+'"></div>'+
+      '<div style="grid-column:1/3"><label>English required</label><input id="f_eng" value="'+esc(p.english_required)+'"></div>'+
+      '<div style="grid-column:1/3"><label>Requirements / notes</label><textarea id="f_req" rows="2">'+esc(p.requirements_text)+'</textarea></div>'+
+    '</div>',
+    async function(){
+      await api('/programs/'+p.id,{method:'PUT',body:JSON.stringify({
+        name:val('f_name'), degree_level:val('f_degree'), status:val('f_status'),
+        application_opening_date:val('f_open'), deadline:val('f_dead'), apply_fee:val('f_fee'),
+        apply_link:val('f_link'), cgpa_required:val('f_cgpa'), english_required:val('f_eng'),
+        requirements_text:val('f_req')})});
+      toast('Programme updated','ok'); closeModal(); afterProgChange();
+    });
+}
+async function delProgram(id){ const p=S.progById[id]||{};
+  if(!confirm('Delete programme: '+(p.name||'')+'?'))return;
+  await api('/programs/'+id,{method:'DELETE'}); toast('Programme deleted','ok'); afterProgChange(); }
+
+// ============ UNIVERSITIES ============
+function uniProgTable(progs){
+  if(!progs||!progs.length) return '<div class="panel-b muted">No programmes yet — open the university to add one, or run the reader.</div>';
+  return '<div class="tscroll"><table><thead><tr><th>Programme</th><th>Degree</th><th>Status</th>'+
+    '<th>Opens</th><th>Deadline</th><th>Fee</th><th>CGPA</th><th>English</th><th>Link</th><th></th></tr></thead><tbody>'+
+    progs.map(function(p){ return '<tr>'+
+      '<td><b>'+esc(p.name)+'</b></td><td>'+degPill(p.degree_level)+'</td><td>'+statusPill(p.status)+'</td>'+
+      '<td>'+(esc(p.application_opening_date)||'<span class=muted>—</span>')+'</td>'+
+      '<td>'+(esc(p.deadline)||'<span class=muted>—</span>')+'</td>'+
+      '<td>'+(esc(p.apply_fee)||'<span class=muted>—</span>')+'</td>'+
+      '<td>'+(esc(trim(p.cgpa_required,30))||'<span class=muted>—</span>')+'</td>'+
+      '<td>'+(esc(trim(p.english_required,30))||'<span class=muted>—</span>')+'</td>'+
+      '<td>'+(p.apply_link?'<a href="'+esc(p.apply_link)+'" target="_blank" rel="noopener">open</a>':'<span class=muted>—</span>')+'</td>'+
+      '<td class="nowrap"><button class="ico-btn" title="Edit" onclick="editProg(\''+p.id+'\')">'+icoEdit()+'</button> '+
+        '<button class="ico-btn danger" title="Delete" onclick="delProgram(\''+p.id+'\')">'+icoTrash()+'</button></td>'+
+    '</tr>'; }).join('')+'</tbody></table></div>';
+}
+function toggleUni(id){ const b=document.getElementById('upb_'+id);
+  const ic=document.getElementById('upc_'+id);
+  if(!b) return; const open=b.style.display==='none';
+  b.style.display=open?'block':'none'; if(ic) ic.textContent=open?'▾':'▸'; }
+function expandAllUni(open){ document.querySelectorAll('[id^=upb_]').forEach(function(b){ b.style.display=open?'block':'none'; });
+  document.querySelectorAll('[id^=upc_]').forEach(function(ic){ ic.textContent=open?'▾':'▸'; }); }
+function afterProgChange(){ if(S.view==='universities') viewUniversities(); else loadPrograms(); }
+async function viewUniversities(){
+  await ensureCountries();
+  const country = S.uniCountry||'';
+  const uq = new URLSearchParams(); if(country) uq.set('country', country); if(S.uniQ) uq.set('q', S.uniQ);
+  const pq = new URLSearchParams({limit:'2000'}); if(country) pq.set('country', country); if(S.uniQ) pq.set('q', S.uniQ);
+  const res = await Promise.all([ api('/universities'+(uq.toString()?('?'+uq):'')),
+                                  api('/programs?'+pq.toString()).catch(function(){return [];}) ]);
+  const list=res[0], progs=res[1]||[];
+  S.uniById={}; list.forEach(function(u){ S.uniById[u.id]=u; });
+  S.progById={}; progs.forEach(function(p){ S.progById[p.id]=p; });
+  const byUni={}; progs.forEach(function(p){ (byUni[p.university_id]=byUni[p.university_id]||[]).push(p); });
+  const mSum=list.reduce(function(a,u){return a+(u.master_count||0);},0);
+  const bSum=list.reduce(function(a,u){return a+(u.bachelor_count||0);},0);
+  const scopeName = country ? ((S.countries.find(function(c){return c.code===country;})||{}).name||country) : 'All countries';
+  // expand programmes by default when focused on one country or a search; collapse for the full list
+  const openByDefault = !!(country || S.uniQ);
+  const panels = list.map(function(u){
+    const ps=byUni[u.id]||[]; const tot=u.master_count+u.bachelor_count;
+    return '<div class="panel" style="margin-bottom:12px"><div class="panel-h">'+
+        '<span style="cursor:pointer" onclick="toggleUni(\''+u.id+'\')"><span id="upc_'+u.id+'">'+(openByDefault?'▾':'▸')+'</span> '+
+          '<b>'+esc(u.name)+'</b>'+(u.city?' <span class="muted">· '+esc(u.city)+'</span>':'')+
+          ' <span class="tag">'+(u.country_code||'')+'</span>'+(u.origin==='manual'?' <span class="tag">manual</span>':'')+'</span>'+
+        '<span class="nowrap"><span class="muted">'+u.master_count+" M · "+u.bachelor_count+' B</span> '+
+          '<button class="ico-btn" title="Open / full view" onclick="openUniversity(\''+u.id+'\')">'+icoEye()+'</button> '+
+          '<button class="ico-btn" title="Add programme" onclick="addProgramTo(\''+u.id+'\')">'+icoPlus()+'</button> '+
+          '<button class="ico-btn" title="Edit university" onclick="editUni(\''+u.id+'\')">'+icoEdit()+'</button> '+
+          '<button class="ico-btn danger" title="Delete university" onclick="delUniversity(\''+u.id+'\')">'+icoTrash()+'</button></span></div>'+
+      '<div id="upb_'+u.id+'" style="display:'+(openByDefault?'block':'none')+'">'+uniProgTable(ps)+'</div></div>';
+  }).join('');
+  document.getElementById('main').innerHTML =
+    '<div class="page-head"><div><h2>Universities</h2><div class="sub">Each university with its programmes · pick a country or see all</div></div>'+
+      '<div class="toolbar">'+
+        '<input id="uQ" placeholder="Search university, city or country" value="'+esc(S.uniQ)+'"'+
+               ' oninput="S.uniQ=this.value" onkeydown="if(event.key===\'Enter\')viewUniversities()" style="min-width:240px" />'+
+        '<button class="btn" onclick="viewUniversities()">Search</button>'+
+        (S.uniQ?'<button class="btn ghost" onclick="S.uniQ=\'\';viewUniversities()">Clear</button>':'')+
+        '<button class="btn" onclick="newUniversity()">'+icoPlus()+' Add university</button></div></div>'+
+    countryPills(country, 'pickUniCountry')+
+    countryWarn()+
+    '<div class="cards" style="margin-bottom:12px">'+
+      card('Scope', esc(scopeName))+card('Universities', list.length)+
+      card("Master's", mSum)+card("Bachelor's", bSum)+'</div>'+
+    '<div class="toolbar" style="margin-bottom:10px"><span class="muted">'+list.length+' university(ies)</span>'+
+      '<button class="btn ghost sm" onclick="expandAllUni(true)">Expand all</button>'+
+      '<button class="btn ghost sm" onclick="expandAllUni(false)">Collapse all</button></div>'+
+    (panels||'<div class="panel"><div class="panel-b empty">No universities in '+esc(scopeName)+' yet.</div></div>');
+}
+function editUni(id){ editUniversity(S.uniById[id]); }
+async function openUniversity(id){
+  const m=document.getElementById('main'); m.innerHTML='<div class="empty">Loading…</div>';
+  const u=await api('/universities/'+id);
+  const progs=u.programs||[]; S.progById={}; progs.forEach(function(p){ S.progById[p.id]=p; });
+  const masters=progs.filter(function(p){return p.degree_level==='MASTER';});
+  const bachelors=progs.filter(function(p){return p.degree_level!=='MASTER';});
+  function critRow(lbl,val){ return '<div class="k">'+lbl+'</div><div>'+(val&&val!=='—'?val:'<span class=muted>—</span>')+'</div>'; }
+  function progCard(p){
+    return '<div class="panel" style="margin-bottom:12px"><div class="panel-h">'+
+      '<span>'+esc(p.name)+' '+degPill(p.degree_level)+' '+statusPill(p.status)+'</span>'+
+      '<span class="nowrap"><button class="ico-btn" title="Edit" onclick="editProg(\''+p.id+'\')">'+icoEdit()+'</button> '+
+        '<button class="ico-btn danger" title="Delete" onclick="delProgramDetail(\''+p.id+'\',\''+u.id+'\')">'+icoTrash()+'</button></span></div>'+
+      '<div class="panel-b"><div class="kv">'+
+        critRow('Application opens', esc(p.application_opening_date))+
+        critRow('Deadline', esc(p.deadline))+
+        critRow('Application fee', esc(p.apply_fee))+
+        critRow('CGPA required', esc(p.cgpa_required))+
+        critRow('English required', esc(p.english_required))+
+        critRow('Apply / portal link', p.apply_link?'<a href="'+esc(p.apply_link)+'" target="_blank" rel="noopener">'+esc(trim(p.apply_link,60))+'</a>':'—')+
+        (p.requirements_text?critRow('Requirements', esc(p.requirements_text)):'')+
+      '</div></div></div>';
+  }
+  m.innerHTML =
+    '<div class="page-head"><div style="display:flex;align-items:center;gap:12px">'+
+      '<button class="ico-btn" style="font-size:18px" onclick="go(\'universities\')" title="Back">&lsaquo;</button>'+
+      '<div><h2 style="margin:0">'+esc(u.name)+'</h2>'+
+      '<div class="sub">'+esc(u.country_name||'')+(u.city?' · '+esc(u.city):'')+' · '+progs.length+' programme(s)</div></div></div>'+
+      '<div class="toolbar">'+(u.website?'<a class="btn ghost" href="'+esc(u.website)+'" target="_blank" rel="noopener">Website</a>':'')+
+        '<button class="btn ghost" id="uReadBtn" onclick="readUniversityNow(\''+u.id+'\')">'+icoPlay()+' Read criteria now</button>'+
+        '<button class="btn" onclick="addProgramTo(\''+u.id+'\')">'+icoPlus()+' Add programme</button></div></div>'+
+    '<div id="uniReadOut"></div>'+
+    (masters.length?'<h3 style="margin:16px 0 10px">Master\'s · '+masters.length+'</h3>'+masters.map(progCard).join(''):'')+
+    (bachelors.length?'<h3 style="margin:18px 0 10px">Bachelor\'s · '+bachelors.length+'</h3>'+bachelors.map(progCard).join(''):'')+
+    (progs.length?'':'<div class="panel"><div class="empty">No programmes stored yet. Add the link and run the reader to read its criteria.</div></div>');
+}
+async function readUniversityNow(id){
+  const btn=document.getElementById('uReadBtn'); const out=document.getElementById('uniReadOut');
+  if(btn){ btn.disabled=true; btn.textContent='Reading…'; }
+  let estHuman='';
+  try{ const est=await api('/reader/estimate?university_id='+id); estHuman=est.estimated_human; }catch(e){}
+  if(out) out.innerHTML='<div class="panel"><div class="panel-b empty">Reading this university’s links now'+
+    (estHuman?' — estimated '+esc(estHuman):'')+'…</div></div>';
+  try{
+    const r=await api('/universities/'+id+'/read',{method:'POST'});
+    out.innerHTML=renderUniRead(r);
+    refreshBadge();
+  }catch(e){ out.innerHTML='<div class="panel"><div class="panel-b" style="color:var(--bad)">'+esc(e.message)+'</div></div>'; }
+  if(btn){ btn.disabled=false; btn.innerHTML=icoPlay()+' Read criteria now'; }
+}
+function readFromLine(row){
+  if(!row.page_title && !row.source_url) return '';
+  const link=row.source_url
+    ? '<a href="'+esc(row.source_url)+'" target="_blank" rel="noopener">'+esc(trim(row.source_url,70))+'</a>' : '';
+  const foll=row.followed_url
+    ? ' <span class="muted">(read sub-page '+esc(trim(row.followed_url,50))+')</span>' : '';
+  return '<div class="panel-b" style="padding-bottom:0"><span class="muted">Read from:</span> '+
+    (row.page_title?('<b>'+esc(row.page_title)+'</b> — '):'')+link+foll+'</div>';
+}
+function renderUniRead(r){
+  const cmp=r.compare||{rows:[]};
+  const head='<div class="panel"><div class="panel-h"><span><b>Reader result</b> · '+esc(r.university_name)+'</span>'+
+    '<span class="muted">'+r.checked+' link(s) · '+r.alive+' reachable · '+r.broken+' broken · '+
+    (r.used_ai?'AI':'regex')+'</span></div><div class="panel-b muted">'+esc(r.message)+'</div></div>';
+  if(!cmp.rows||!cmp.rows.length) return head+'<div class="panel"><div class="panel-b empty">No programme pages were parsed. Add an apply/portal link to a programme, then read again.</div></div>';
+  const body=cmp.rows.map(function(row){
+    const flds=row.fields.filter(function(f){return f.read||f.stored;});
+    const inner=flds.length?flds.map(function(f){
+      return '<tr class="'+(f.changed?'diff':'')+'"><td class="muted">'+esc(f.field)+'</td>'+
+        '<td>'+(esc(f.stored)||'<span class=muted>—</span>')+'</td>'+
+        '<td><b>'+(esc(f.read)||'<span class=muted>—</span>')+'</b>'+(f.changed?' <span class="tag" style="background:var(--warn-soft);color:var(--warn)">changed</span>':'')+'</td></tr>';
+    }).join(''):'<tr><td colspan=3 class="muted">Page read, but no criteria were found on it.</td></tr>';
+    return '<div class="panel"><div class="panel-h"><span><b>'+esc(row.program)+'</b> '+degPill(row.degree_level)+'</span>'+
+      '<span class="muted">'+(row.link_alive?('HTTP '+(row.http_status||'')):'unreachable')+' · '+(row.read_chars||0)+' chars</span></div>'+
+      readFromLine(row)+
+      '<table><thead><tr><th>Criterion</th><th>Stored</th><th>Read from page</th></tr></thead><tbody>'+inner+'</tbody></table></div>';
+  }).join('');
+  const tip='<div class="muted" style="margin:6px 2px 10px">Changes found here are waiting in <a href="#" onclick="go(\'changes\');return false">Changes</a> for approval.</div>';
+  return head+(r.changes?tip:'')+body;
+}
+function editProg(id){ editProgram(S.progById[id]); }
+async function delProgramDetail(pid, uid){ if(!confirm('Delete this programme?'))return;
+  await api('/programs/'+pid,{method:'DELETE'}); toast('Programme deleted','ok'); openUniversity(uid); }
+function addProgramTo(uid){
+  openModal('Add programme',
+    '<div class="grid2">'+
+      '<div style="grid-column:1/3"><label>Programme name</label><input id="np_name"></div>'+
+      '<div><label>Degree</label><select id="np_deg"><option value="MASTER">Master\'s</option><option value="BACHELOR">Bachelor\'s</option></select></div>'+
+      '<div><label>Status</label><select id="np_status"><option value="">—</option><option value="OPEN">Open</option><option value="CLOSE">Closed</option></select></div>'+
+      '<div style="grid-column:1/3"><label>Apply / portal link</label><input id="np_link" placeholder="https://…"></div>'+
+      '<div><label>Application opens</label><input id="np_open"></div>'+
+      '<div><label>Deadline</label><input id="np_dead"></div>'+
+      '<div><label>Application fee</label><input id="np_fee"></div>'+
+      '<div><label>CGPA required</label><input id="np_cgpa"></div>'+
+      '<div style="grid-column:1/3"><label>English required</label><input id="np_eng"></div>'+
+    '</div><p class="muted" style="margin-top:8px">Tip: add just the name + link and run the reader to fill the criteria automatically.</p>',
+    async function(){
+      await api('/universities/'+uid+'/programs',{method:'POST',body:JSON.stringify({
+        name:val('np_name'), degree_level:val('np_deg'), status:val('np_status'),
+        apply_link:val('np_link'), application_opening_date:val('np_open'), deadline:val('np_dead'),
+        apply_fee:val('np_fee'), cgpa_required:val('np_cgpa'), english_required:val('np_eng')})});
+      toast('Programme added','ok'); closeModal(); openUniversity(uid);
+    });
+}
+let _npSeq=0; let _npRows=[];
+function _progRowHtml(i){
+  return '<div class="panel" id="nprow'+i+'" style="margin:8px 0;padding:10px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+      '<b>Programme #'+i+'</b>'+
+      '<button type="button" class="ico-btn danger" title="Remove this programme" onclick="removeProgRow('+i+')">'+icoTrash()+'</button></div>'+
+    '<div class="grid2">'+
+      '<div style="grid-column:1/3"><label>Programme name</label><input id="np'+i+'_name" placeholder="MSc Data Science"></div>'+
+      '<div><label>Degree</label><select id="np'+i+'_deg"><option value="MASTER">Master\'s</option><option value="BACHELOR">Bachelor\'s</option></select></div>'+
+      '<div><label>Status</label><select id="np'+i+'_status"><option value="">—</option><option value="OPEN">Open</option><option value="CLOSE">Closed</option></select></div>'+
+      '<div style="grid-column:1/3"><label>Apply / portal link</label><input id="np'+i+'_link" placeholder="https://…"></div>'+
+      '<div><label>Application opens</label><input id="np'+i+'_open"></div>'+
+      '<div><label>Deadline</label><input id="np'+i+'_dead"></div>'+
+      '<div><label>Application fee</label><input id="np'+i+'_fee"></div>'+
+      '<div><label>CGPA required</label><input id="np'+i+'_cgpa"></div>'+
+      '<div style="grid-column:1/3"><label>English required</label><input id="np'+i+'_eng" placeholder="IELTS 6.5 / TOEFL 90"></div>'+
+      '<div style="grid-column:1/3"><label>Requirements / notes</label><input id="np'+i+'_req"></div>'+
+    '</div></div>';
+}
+function addProgRow(){ _npSeq++; _npRows.push(_npSeq);
+  const c=document.getElementById('progList'); if(c) c.insertAdjacentHTML('beforeend', _progRowHtml(_npSeq)); }
+function removeProgRow(i){ const el=document.getElementById('nprow'+i); if(el) el.remove();
+  _npRows=_npRows.filter(function(x){return x!==i;}); }
+function newUniversity(){
+  _npSeq=0; _npRows=[];
+  const cur=S.uniCountry||'';
+  const opts=(S.countries||[]).map(function(c){
+    return '<option value="'+c.code+'" '+(cur===c.code?'selected':'')+'>'+esc(c.name)+' ('+c.code+')</option>';
+  }).join('');
+  openModal('Add university',
+    '<div class="grid2">'+
+      '<div style="grid-column:1/3"><label>Country</label>'+
+        '<select id="u_country" onchange="document.getElementById(\'newCountryRow\').style.display=(this.value===\'__new__\'?\'block\':\'none\')">'+
+          opts+'<option value="__new__">➕ Add a new country…</option></select></div>'+
+      '<div id="newCountryRow" style="display:none;grid-column:1/3"><div class="grid2">'+
+        '<div><label>New country name</label><input id="u_cname" placeholder="Pakistan"></div>'+
+        '<div><label>New country code (2 letters)</label><input id="u_ccode" placeholder="PK" maxlength="3"></div>'+
+      '</div></div>'+
+      '<div style="grid-column:1/3"><label>University name</label><input id="u_name" placeholder="University of Management and Technology"></div>'+
+      '<div><label>City</label><input id="u_city" placeholder="Lahore"></div>'+
+      '<div><label>Type</label><input id="u_type" placeholder="Public / Private"></div>'+
+      '<div style="grid-column:1/3"><label>Website</label><input id="u_web" placeholder="https://…"></div>'+
+    '</div>'+
+    '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">'+
+      '<b>Programmes &amp; criteria</b> <span class="muted">— add one or more; each can have different criteria</span></div>'+
+    '<div id="progList"></div>'+
+    '<button type="button" class="btn ghost sm" style="margin-top:8px" onclick="addProgRow()">'+icoPlus()+' Add another programme</button>',
+    async function(){
+      const sel=val('u_country');
+      let code, cname='';
+      if(sel==='__new__'){ cname=val('u_cname'); code=(val('u_ccode')||cname.slice(0,2)).toUpperCase();
+        if(!cname){ toast('Enter the new country name','bad'); return; } }
+      else { code=sel; }
+      if(!code){ toast('Choose a country','bad'); return; }
+      if(!val('u_name')){ toast('Enter the university name','bad'); return; }
+      const programs=[];
+      _npRows.forEach(function(i){
+        const nm=val('np'+i+'_name'); if(!nm) return;
+        programs.push({name:nm, degree_level:val('np'+i+'_deg'), status:val('np'+i+'_status'),
+          apply_link:val('np'+i+'_link'), application_opening_date:val('np'+i+'_open'),
+          deadline:val('np'+i+'_dead'), apply_fee:val('np'+i+'_fee'),
+          cgpa_required:val('np'+i+'_cgpa'), english_required:val('np'+i+'_eng'),
+          requirements_text:val('np'+i+'_req')});
+      });
+      await api('/universities',{method:'POST',body:JSON.stringify({
+        country_code:code, country_name:cname, name:val('u_name'),
+        city:val('u_city'), type:val('u_type'), website:val('u_web'), programs:programs})});
+      toast('University created'+(programs.length?(' with '+programs.length+' programme(s)'):''),'ok');
+      closeModal();
+      await loadCountries();                 // pick up a newly-added country
+      S.uniCountry=code; S.uniQ='';
+      viewUniversities();
+    });
+  addProgRow();   // start with one empty programme row
+}
+function editUniversity(u){
+  openModal('Edit university',
+    '<label>Name</label><input id="u_name" value="'+esc(u.name)+'">'+
+    '<div class="grid2"><div><label>City</label><input id="u_city" value="'+esc(u.city)+'"></div>'+
+      '<div><label>Type</label><input id="u_type" value="'+esc(u.type)+'"></div></div>'+
+    '<label>Website</label><input id="u_web" value="'+esc(u.website)+'">',
+    async function(){
+      await api('/universities/'+u.id,{method:'PUT',body:JSON.stringify({
+        name:val('u_name'), city:val('u_city'), type:val('u_type'), website:val('u_web')})});
+      toast('University updated','ok'); closeModal(); viewUniversities();
+    });
+}
+async function delUniversity(id){ const u=S.uniById[id]||{};
+  if(!confirm('Delete '+(u.name||'this university')+' and all its programmes?'))return;
+  await api('/universities/'+id,{method:'DELETE'}); toast('University deleted','ok'); viewUniversities(); }
+
+// ============ READER ============
+async function viewReader(){
+  const runs = await api('/reader/runs?limit=15');
+  const copts = S.countries.map(function(c){ return '<option value="'+c.code+'">'+esc(c.name)+'</option>'; }).join('');
+  document.getElementById('main').innerHTML =
+    '<div class="page-head"><div><h2>Reader</h2>'+
+      '<div class="sub">Read each programme\'s link and compare with stored data</div></div></div>'+
+    '<div class="panel"><div class="panel-b">'+
+      '<div class="toolbar">'+
+        '<select id="r_country">'+(isSuper()?'<option value="">All my countries</option>':'')+copts+'</select>'+
+        '<select id="r_ai"><option value="">AI if key set</option><option value="true">Force AI</option><option value="false">Regex only</option></select>'+
+        '<select id="r_max"><option value="">No limit</option><option value="25">25 pages</option><option value="100">100 pages</option><option value="300">300 pages</option></select>'+
+        '<label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="r_discover"> Auto-find missing links</label>'+
+        '<button class="btn" onclick="startRead()">'+icoPlay()+' Start read</button>'+
+        '<span class="muted" id="r_note"></span>'+
+      '</div></div></div>'+
+    '<div class="panel"><div class="panel-h">Recent runs</div>'+
+      '<table><thead><tr><th>Started</th><th>Countries</th><th>Status</th>'+
+        '<th class="right" title="Total links checked">Links</th>'+
+        '<th class="right" title="Reachable">Alive</th><th class="right" title="Unreachable / dead">Broken</th>'+
+        '<th class="right" title="Pages parsed">Read</th><th class="right">Changes</th><th>Engine</th><th></th></tr></thead>'+
+      '<tbody id="runs">'+(runs.map(runRow).join('')||'<tr><td colspan=10 class="empty">No runs yet.</td></tr>')+'</tbody></table></div>'+
+    '<div id="compareWrap"></div>';
+}
+function runRow(r){
+  const st = r.status==='DONE'?'<span class="pill open">Done</span>':
+             r.status==='RUNNING'?'<span class="pill unk">Running…</span>':
+             r.status==='FAILED'?'<span class="pill close">Failed</span>':'<span class="pill unk">'+esc(r.status)+'</span>';
+  const total=(r.links_alive||0)+(r.links_broken||0);
+  return '<tr><td class="nowrap">'+fmtDate(r.started_at)+'</td><td>'+esc(r.countries||'ALL')+'</td><td>'+st+'</td>'+
+    '<td class="right"><b>'+(r.links_checked!=null?r.links_checked:total)+'</b></td>'+
+    '<td class="right" style="color:var(--ok)">'+r.links_alive+'</td>'+
+    '<td class="right" style="color:var(--bad)">'+r.links_broken+'</td>'+
+    '<td class="right">'+r.programs_read+'</td><td class="right">'+r.changes_found+'</td>'+
+    '<td>'+(r.used_ai?'<span class="tag">AI</span>':'<span class="tag">regex</span>')+'</td>'+
+    '<td><button class="btn ghost sm" onclick="showCompare(\''+r.id+'\')">Compare</button></td></tr>';
+}
+async function startRead(){
+  const c=val('r_country'), ai=val('r_ai'), mx=val('r_max');
+  const disc=document.getElementById('r_discover'); const discover=disc&&disc.checked;
+  const note=document.getElementById('r_note');
+  // show an up-front time estimate before starting
+  try{
+    const est=await api('/reader/estimate'+(c?('?countries='+c):''));
+    if(note) note.textContent='Estimated time: '+est.estimated_human+' ('+est.unique_pages+' page(s), '+est.engine+').';
+  }catch(e){}
+  const qs=new URLSearchParams(); if(c)qs.set('countries',c); if(ai)qs.set('use_ai',ai); if(mx)qs.set('max_pages',mx);
+  if(discover)qs.set('discover','true');
+  const res = await api('/reader/run?'+qs.toString(),{method:'POST'});
+  toast(res.message, res.run_id?'ok':'');
+  const estTxt=(note&&note.textContent)?note.textContent+' — ':'';
+  if(note) note.textContent=estTxt+res.message;
+  if(res.run_id) S.activeRun=res.run_id;
+  pollRuns();
+}
+let pollTimer=null;
+function pollRuns(){ clearTimeout(pollTimer);
+  pollTimer=setTimeout(async function(){ if(S.view!=='reader')return;
+    try{ const runs=await api('/reader/runs?limit=15');
+      const body=document.getElementById('runs'); if(body){ body.innerHTML=runs.map(runRow).join(''); }
+      const running=runs.some(function(r){return r.status==='RUNNING';});
+      if(running){ pollRuns(); }
+      else{ refreshBadge();
+        if(S.activeRun){ const rid=S.activeRun; S.activeRun=null;
+          document.getElementById('r_note').textContent='Read complete — showing side-by-side comparison below.';
+          showCompare(rid); } }
+    }catch(e){} },3000);
+}
+async function showCompare(runId){
+  const wrap=document.getElementById('compareWrap');
+  wrap.innerHTML='<div class="panel"><div class="panel-b empty">Loading comparison…</div></div>';
+  const res = await Promise.all([
+    api('/reader/runs/'+runId+'/compare'),
+    api('/changes?status=PENDING&run='+runId).catch(function(){return [];})
+  ]);
+  const cmp=res[0], changes=res[1];
+  const chgMap={}; (changes||[]).forEach(function(ch){ chgMap[(ch.program_id||'')+'|'+ch.field]=ch.id; });
+  if(!cmp.rows.length){ wrap.innerHTML='<div class="panel"><div class="panel-b empty">'+esc(cmp.message)+'</div></div>'; return; }
+  const rowsHtml = cmp.rows.map(function(r){
+    const flds = r.fields.filter(function(f){return f.read||f.stored;});
+    const inner = flds.map(function(f){
+      const chId = chgMap[r.program_id+'|'+f.field];
+      const act = (f.changed && chId) ?
+        '<button class="btn ok sm" onclick="review(\''+chId+'\',\'approve\',\''+runId+'\')">Approve</button> '+
+        '<button class="btn bad sm" onclick="review(\''+chId+'\',\'decline\',\''+runId+'\')">Decline</button>' : '';
+      return '<tr class="'+(f.changed?'diff':'')+'"><td class="muted">'+esc(f.field)+'</td>'+
+        '<td>'+(esc(f.stored)||'<span class=muted>—</span>')+'</td>'+
+        '<td>'+(esc(f.read)||'<span class=muted>—</span>')+(f.changed?' <span class="tag" style="background:var(--warn-soft);color:var(--warn)">changed</span>':'')+'</td>'+
+        '<td class="nowrap">'+act+'</td></tr>';
+    }).join('');
+    return '<div class="panel"><div class="panel-h">'+
+        '<span><b>'+esc(r.university)+'</b> — '+esc(r.program)+' '+degPill(r.degree_level)+'</span>'+
+        '<span class="muted">'+(r.link_alive?('HTTP '+(r.http_status||'')):'unreachable')+' · '+(r.read_chars||0)+' chars · '+r.changed_count+' change(s)</span></div>'+
+      readFromLine(r)+
+      '<table><thead><tr><th>Criterion</th><th>Stored</th><th>Read from page</th><th></th></tr></thead>'+
+      '<tbody>'+inner+'</tbody></table></div>';
+  }).join('');
+  wrap.innerHTML = '<div class="page-head" style="margin-top:8px"><div><h2>Read vs stored</h2>'+
+      '<div class="sub">'+cmp.total+' programme(s) · '+cmp.changed+' with changes · engine: '+(cmp.used_ai?'AI':'regex')+'</div></div></div>'+rowsHtml;
+}
+async function review(id,decision,runId){
+  await api('/changes/'+id+'/review',{method:'POST',body:JSON.stringify({decision:decision})});
+  toast('Change '+decision+'d','ok'); refreshBadge();
+  if(runId)showCompare(runId); else if(S.view==='changes')loadChanges();
+}
+async function removeChange(id){ if(!confirm('Remove this change from the list?'))return;
+  await api('/changes/'+id,{method:'DELETE'}); toast('Change removed','ok');
+  if(S.view==='changes')loadChanges(); }
+
+// ============ CHANGES ============
+function fieldLabel(f){ return ({status:'Status', application_opening_date:'Application opens',
+  deadline:'Deadline', apply_fee:'Application fee', cgpa_required:'CGPA required',
+  english_required:'English required', apply_link:'Apply link', reachable:'Link reachability'})[f]||f||''; }
+function changeTypeLabel(t){ return ({CRITERIA_CHANGED:'Criteria', LINK_FOUND:'Link found',
+  LINK_NEEDED:'Needs link', LINK_DOWN:'Link down', LINK_RESTORED:'Link back'})[t]||t||''; }
+function pickChStatus(s){ S.chStatus=s; viewChanges(); }
+function pickChCountry(c){ S.chCountry=c; viewChanges(); }
+async function viewChanges(){
+  await ensureCountries();
+  if(!S.chStatus) S.chStatus='PENDING';
+  const tabs=[['PENDING','Pending'],['APPROVED','Approved'],['DECLINED','Declined'],['ALL','All']];
+  document.getElementById('main').innerHTML=
+    '<div class="page-head"><div><h2>Changes</h2><div class="sub">Proposed updates — approve or decline; grouped by university</div></div></div>'+
+    '<div class="tabs" style="margin-bottom:10px">'+
+      tabs.map(function(t){ return '<button class="tab '+(S.chStatus===t[0]?'active':'')+'" onclick="pickChStatus(\''+t[0]+'\')">'+t[1]+'</button>'; }).join('')+
+    '</div>'+
+    countryPills(S.chCountry||'', 'pickChCountry')+
+    '<div class="sub" id="chCount" style="margin:0 2px 10px">—</div>'+
+    '<div id="chWrap"><div class="panel"><div class="panel-b empty">Loading…</div></div></div>';
+  loadChanges();
+}
+async function loadChanges(){
+  const st=S.chStatus||'PENDING', c=S.chCountry||'';
+  const wrap=document.getElementById('chWrap');
+  let rows;
+  try{ rows=await api('/changes?status='+st+(c?('&country='+c):'')); }
+  catch(e){ if(wrap) wrap.innerHTML='<div class="panel"><div class="panel-b" style="color:var(--bad)">'+esc(e.message)+'</div></div>'; return; }
+  const cc=document.getElementById('chCount');
+  if(cc) cc.textContent=rows.length+' '+st.toLowerCase()+' change(s)'+(c?(' · '+c):'');
+  if(!rows.length){ if(wrap) wrap.innerHTML='<div class="panel"><div class="panel-b empty">No '+st.toLowerCase()+' changes'+(c?(' for '+c):'')+'.</div></div>'; return; }
+  // sort then group by country + university (gives a clear sequence)
+  rows.sort(function(a,b){ return (a.country||'').localeCompare(b.country||'')||
+    (a.university||'').localeCompare(b.university||'')||(a.program||'').localeCompare(b.program||''); });
+  const groups=[]; const idx={};
+  rows.forEach(function(ch){ const k=(ch.country||'')+'|'+(ch.university||'');
+    if(idx[k]===undefined){ idx[k]=groups.length; groups.push({cc:ch.country_code, uni:ch.university, country:ch.country, items:[]}); }
+    groups[idx[k]].items.push(ch); });
+  function rowHtml(ch){
+    const act = ch.status==='PENDING'
+      ? '<button class="btn ok sm" onclick="review(\''+ch.id+'\',\'approve\')">Approve</button> '+
+        '<button class="btn bad sm" onclick="review(\''+ch.id+'\',\'decline\')">Decline</button>'
+      : '<span class="pill '+(ch.status==='APPROVED'?'open':'close')+'">'+esc(ch.status)+'</span> '+
+        '<button class="ico-btn danger" title="Remove from list" onclick="removeChange(\''+ch.id+'\')">'+icoTrash()+'</button>';
+    return '<tr><td>'+esc(ch.program||'—')+' '+(ch.degree_level?degPill(ch.degree_level):'')+'</td>'+
+      '<td class="muted">'+esc(fieldLabel(ch.field))+' <span class="tag">'+esc(changeTypeLabel(ch.change_type))+'</span></td>'+
+      '<td>'+(esc(trim(ch.old_value,50))||'<span class=muted>—</span>')+'</td>'+
+      '<td style="color:var(--accent);text-align:center">&rarr;</td>'+
+      '<td><b>'+(esc(trim(ch.new_value,50))||'<span class=muted>—</span>')+'</b></td>'+
+      '<td class="nowrap">'+act+'</td></tr>';
+  }
+  if(wrap) wrap.innerHTML = groups.map(function(g){
+    return '<div class="panel" style="margin-bottom:12px"><div class="panel-h">'+
+        '<span><b>'+esc(g.uni||'—')+'</b> <span class="tag">'+esc(g.cc||'')+'</span></span>'+
+        '<span class="muted">'+g.items.length+' change(s)</span></div>'+
+      '<div class="tscroll"><table><thead><tr><th>Programme</th><th>Field</th><th>Stored</th><th></th><th>Proposed</th><th></th></tr></thead>'+
+      '<tbody>'+g.items.map(rowHtml).join('')+'</tbody></table></div></div>';
+  }).join('');
+}
+
+// ============ VERIFY ============
+async function viewVerify(){
+  document.getElementById('main').innerHTML=
+    '<div class="page-head"><div><h2>Verify</h2><div class="sub">Database vs Excel, and read-a-link check</div></div></div>'+
+    '<div class="panel"><div class="panel-h">Database vs Excel sheets <button class="btn ghost sm" onclick="runVerifyExcel()">Run check</button></div>'+
+      '<div id="verifyExcel" class="panel-b muted">Click “Run check”.</div></div>'+
+    '<div class="panel"><div class="panel-h">Read a link now &amp; compare</div><div class="panel-b">'+
+      '<div class="grid2">'+
+        '<div style="grid-column:1/3"><label>URL</label><input id="v_url" placeholder="https://…"></div>'+
+        '<div style="grid-column:1/3"><label>Programme ID (optional — to compare with stored)</label><input id="v_pid" placeholder="paste a programme id"></div>'+
+      '</div>'+
+      '<button class="btn" style="margin-top:12px" onclick="runReadUrl()">'+icoPlay()+' Read &amp; compare</button>'+
+      '<div id="readUrlOut" style="margin-top:14px"></div>'+
+    '</div></div>';
+}
+async function runVerifyExcel(){
+  const el=document.getElementById('verifyExcel'); el.innerHTML='Checking…';
+  const v=await api('/verify/excel');
+  el.innerHTML='<table><thead><tr><th>Country</th><th class="right">Univ (DB/Excel)</th>'+
+    '<th class="right">Master (DB/Excel)</th><th class="right">Bachelor (DB/Excel)</th><th>Match</th></tr></thead>'+
+    '<tbody>'+v.rows.map(function(r){ return '<tr><td><b>'+esc(r.country)+'</b></td>'+
+      '<td class="right">'+r.db_universities+'/'+r.excel_universities+'</td>'+
+      '<td class="right">'+r.db_master+'/'+r.excel_master+'</td>'+
+      '<td class="right">'+r.db_bachelor+'/'+r.excel_bachelor+'</td>'+
+      '<td>'+(r.match?'<span class="pill open">match</span>':'<span class="pill close">differs</span>')+'</td></tr>'; }).join('')+'</tbody></table>'+
+    '<p style="margin:12px 0 0">'+esc(v.message)+'</p>';
+}
+async function runReadUrl(){
+  const url=val('v_url'); if(!url){toast('Enter a URL');return;}
+  const out=document.getElementById('readUrlOut'); out.innerHTML='<div class="muted">Reading…</div>';
+  try{
+    const r=await api('/verify/read-url',{method:'POST',body:JSON.stringify({url:url, program_id:val('v_pid')||null})});
+    const keys=['status','application_opening_date','deadline','apply_fee','cgpa_required','english_required'];
+    const labels={status:'Status',application_opening_date:'Application opens',deadline:'Deadline',
+      apply_fee:'Application fee',cgpa_required:'CGPA required',english_required:'English required'};
+    const matched = r.university_name || r.program_name;
+    const header = matched
+      ? '<div class="panel-h" style="border:none;padding:0 0 10px"><span><b>'+esc(r.university_name||'')+'</b>'+
+        (r.program_name?' — '+esc(r.program_name):'')+'</span><span class="muted">matched by link</span></div>'
+      : '<div class="muted" style="margin-bottom:8px">No stored programme matched this link — showing what the reader read.</div>';
+    const rows=keys.map(function(k){ const changed=norm(r.read_criteria[k])&&norm(r.read_criteria[k])!==norm(r.stored_criteria[k]);
+      return '<tr class="'+(matched&&changed?'diff':'')+'">'+
+        '<td class="muted">'+labels[k]+'</td><td>'+(esc(r.stored_criteria[k])||'<span class=muted>—</span>')+'</td>'+
+        '<td><b>'+(esc(r.read_criteria[k])||'<span class=muted>—</span>')+'</b>'+(matched&&changed?' <span class="tag" style="background:var(--warn-soft);color:var(--warn)">differs</span>':'')+'</td></tr>'; }).join('');
+    out.innerHTML=header+
+      '<div class="muted" style="margin-bottom:8px">'+esc(r.message)+' '+(r.used_ai?'<span class="tag">AI</span>':'<span class="tag">regex</span>')+' · HTTP '+(r.http_status||'—')+' · '+r.text_chars+' chars read</div>'+
+      '<table><thead><tr><th>Criterion</th><th>Stored</th><th>Read from the page</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }catch(e){ out.innerHTML='<div style="color:var(--bad)">'+esc(e.message)+'</div>'; }
+}
+function norm(s){ return (s==null?'':String(s)).trim().toLowerCase(); }
+
+// ============ ADMINS (super) ============
+async function viewAdmins(){
+  const admins=await api('/auth/admins');
+  document.getElementById('main').innerHTML=
+    '<div class="page-head"><div><h2>Admins</h2><div class="sub">Create country admins and assign countries</div></div>'+
+      '<button class="btn" onclick="newAdmin()">'+icoPlus()+' New admin</button></div>'+
+    '<div class="panel"><table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Countries</th><th>Active</th><th>Last login</th><th></th></tr></thead>'+
+    '<tbody>'+admins.map(function(a){ return '<tr>'+
+      '<td><b>'+esc(a.email)+'</b></td><td>'+(esc(a.full_name)||'—')+'</td>'+
+      '<td><span class="tag">'+(a.role==='SUPER_ADMIN'?'Super':'Country')+'</span></td>'+
+      '<td>'+(a.role==='SUPER_ADMIN'?'<span class="muted">all</span>':(a.countries.map(function(c){return '<span class="tag">'+c.code+'</span>';}).join(' ')||'<span class="muted">none</span>'))+'</td>'+
+      '<td>'+(a.is_active?'<span class="pill open">yes</span>':'<span class="pill close">no</span>')+'</td>'+
+      '<td class="muted nowrap">'+(a.last_login_at?fmtDate(a.last_login_at):'never')+'</td>'+
+      '<td class="nowrap">'+
+        '<button class="ico-btn" title="Edit" onclick=\'editAdmin('+js(a)+')\'>'+icoEdit()+'</button> '+
+        '<button class="ico-btn danger" title="Delete" onclick="delAdmin(\''+a.id+'\',\''+esc(a.email)+'\')">'+icoTrash()+'</button>'+
+      '</td></tr>'; }).join('')+'</tbody></table></div>';
+}
+function countryChecks(selected){
+  const sel={}; (selected||[]).forEach(function(c){ sel[(c.code||c)]=true; });
+  return S.countries.map(function(c){ return '<label style="display:inline-flex;align-items:center;gap:6px;margin:0 14px 8px 0;font-weight:500">'+
+    '<input type="checkbox" class="cc" value="'+c.code+'" style="width:auto" '+(sel[c.code]?'checked':'')+'> '+esc(c.name)+'</label>'; }).join('');
+}
+function newAdmin(){
+  openModal('New admin',
+    '<div class="grid2">'+
+      '<div><label>Email (must be whitelisted)</label><input id="a_email" type="email"></div>'+
+      '<div><label>Full name</label><input id="a_name"></div>'+
+      '<div><label>Password</label><input id="a_pw" type="text" placeholder="min 8 chars"></div>'+
+      '<div><label>Role</label><select id="a_role" onchange="document.getElementById(\'a_cwrap\').style.display=this.value===\'SUPER_ADMIN\'?\'none\':\'block\'">'+
+        '<option value="COUNTRY_ADMIN">Country admin</option><option value="SUPER_ADMIN">Super admin</option></select></div>'+
+    '</div>'+
+    '<div id="a_cwrap" style="margin-top:12px"><label>Assigned countries</label><div>'+countryChecks([])+'</div></div>',
+    async function(){
+      const codes=[].slice.call(document.querySelectorAll('.cc:checked')).map(function(x){return x.value;});
+      await api('/auth/admins',{method:'POST',body:JSON.stringify({
+        email:val('a_email'), full_name:val('a_name'), password:val('a_pw'),
+        role:val('a_role'), country_codes:codes})});
+      toast('Admin created','ok'); closeModal(); viewAdmins();
+    });
+}
+function editAdmin(a){
+  openModal('Edit admin — '+a.email,
+    '<label>Full name</label><input id="a_name" value="'+esc(a.full_name)+'">'+
+    '<div class="grid2"><div><label>New password (optional)</label><input id="a_pw" type="text" placeholder="leave blank to keep"></div>'+
+      '<div><label>Active</label><select id="a_active"><option value="true" '+(a.is_active?'selected':'')+'>Yes</option><option value="false" '+(!a.is_active?'selected':'')+'>No</option></select></div></div>'+
+    (a.role==='SUPER_ADMIN'?'<p class="muted">Super admin manages all countries.</p>':
+      '<div style="margin-top:10px"><label>Assigned countries</label><div>'+countryChecks(a.countries)+'</div></div>'),
+    async function(){
+      const body={ full_name:val('a_name'), is_active: val('a_active')==='true' };
+      if(val('a_pw')) body.password=val('a_pw');
+      if(a.role!=='SUPER_ADMIN') body.country_codes=[].slice.call(document.querySelectorAll('.cc:checked')).map(function(x){return x.value;});
+      await api('/auth/admins/'+a.id,{method:'PUT',body:JSON.stringify(body)});
+      toast('Admin updated','ok'); closeModal(); viewAdmins();
+    });
+}
+async function delAdmin(id,email){ if(!confirm('Delete admin '+email+'?'))return;
+  await api('/auth/admins/'+id,{method:'DELETE'}); toast('Admin deleted','ok'); viewAdmins(); }
+
+// ============ API KEYS (super) ============
+async function viewApiKeys(){
+  const keys=await api('/api-keys');
+  document.getElementById('main').innerHTML=
+    '<div class="page-head"><div><h2>API Keys</h2><div class="sub">Keys for AI extraction — stored encrypted, shown masked</div></div>'+
+      '<button class="btn" onclick="newKey()">'+icoPlus()+' Add key</button></div>'+
+    '<div class="panel"><div class="panel-b muted" style="padding-bottom:0">The reader uses the active key to read criteria accurately. Without a key it falls back to pattern-matching.</div>'+
+    '<table><thead><tr><th>Provider</th><th>Label</th><th>Key</th><th>Model</th><th>Active</th><th>Added by</th><th></th></tr></thead>'+
+    '<tbody>'+(keys.length?keys.map(function(k){ return '<tr>'+
+      '<td><span class="tag">'+esc(k.provider)+'</span></td><td>'+(esc(k.label)||'—')+'</td>'+
+      '<td class="muted nowrap">'+esc(k.masked)+'</td><td>'+(esc(k.model)||'—')+'</td>'+
+      '<td>'+(k.is_active?'<span class="pill open">active</span>':'<button class="btn ghost sm" onclick="activateKey(\''+k.id+'\')">activate</button>')+'</td>'+
+      '<td class="muted">'+(esc(k.created_by)||'—')+'</td>'+
+      '<td><button class="ico-btn danger" title="Delete" onclick="delKey(\''+k.id+'\')">'+icoTrash()+'</button></td>'+
+      '</tr>'; }).join(''):'<tr><td colspan=7 class="empty">No keys stored. Add a Gemini or OpenAI key.</td></tr>')+'</tbody></table></div>';
+}
+function newKey(){
+  const hints={gemini:'gemini-3-flash-preview', openai:'gpt-4o-mini',
+               claude:'claude-haiku-4-5', llama:'llama-3.3-70b-versatile'};
+  openModal('Add API key',
+    '<label>Provider</label><select id="k_prov" onchange="var h={gemini:\'gemini-3-flash-preview\',openai:\'gpt-4o-mini\',claude:\'claude-haiku-4-5\',llama:\'llama-3.3-70b-versatile\'};document.getElementById(\'k_model\').placeholder=h[this.value]||\'\';">'+
+      '<option value="gemini">Google Gemini</option>'+
+      '<option value="openai">ChatGPT (OpenAI)</option>'+
+      '<option value="claude">Claude (Anthropic)</option>'+
+      '<option value="llama">Llama (Groq)</option></select>'+
+    '<label>API key</label><input id="k_key" type="text" placeholder="paste the key">'+
+    '<div class="grid2"><div><label>Label</label><input id="k_label" placeholder="e.g. production"></div>'+
+      '<div><label>Model (optional)</label><input id="k_model" placeholder="gemini-3-flash-preview"></div></div>'+
+    '<p class="muted" style="margin-top:8px;font-size:12px">Llama uses a Groq key by default. Leave model blank to use the recommended default.</p>',
+    async function(){
+      if(!val('k_key')){ toast('Paste the API key','bad'); return; }
+      await api('/api-keys',{method:'POST',body:JSON.stringify({
+        provider:val('k_prov'), key:val('k_key'), label:val('k_label'), model:val('k_model')})});
+      toast('API key saved (encrypted)','ok'); closeModal(); viewApiKeys();
+    });
+}
+async function activateKey(id){ await api('/api-keys/'+id+'/activate',{method:'POST'}); toast('Key activated','ok'); viewApiKeys(); }
+async function delKey(id){ if(!confirm('Delete this API key?'))return; await api('/api-keys/'+id,{method:'DELETE'}); toast('Key deleted','ok'); viewApiKeys(); }
+
+// ============ SCHEDULE (super) ============
+async function viewSchedule(){
+  const s=await api('/schedule');
+  document.getElementById('main').innerHTML=
+    '<div class="page-head"><div><h2>Schedule</h2><div class="sub">Automatic reading</div></div></div>'+
+    '<div class="panel"><div class="panel-b" style="max-width:560px">'+
+      '<label>Enabled</label><select id="s_en"><option value="true" '+(s.enabled?'selected':'')+'>On</option><option value="false" '+(!s.enabled?'selected':'')+'>Off</option></select>'+
+      '<div class="grid2">'+
+        '<div><label>Frequency</label><select id="s_freq">'+
+          ['daily','weekly','interval','once'].map(function(f){return '<option value="'+f+'" '+(s.frequency===f?'selected':'')+'>'+f+'</option>';}).join('')+'</select></div>'+
+        '<div><label>Time (HH:MM)</label><input id="s_time" value="'+(esc(s.at_time)||'02:00')+'"></div>'+
+        '<div><label>Day of week (0=Mon)</label><input id="s_dow" type="number" min="0" max="6" value="'+(s.day_of_week==null?0:s.day_of_week)+'"></div>'+
+        '<div><label>Interval (hours)</label><input id="s_int" type="number" min="1" value="'+(s.interval_hours==null?24:s.interval_hours)+'"></div>'+
+        '<div><label>Countries</label><input id="s_c" value="'+(esc(s.countries)||'ALL')+'" placeholder="ALL or FR,IT"></div>'+
+        '<div><label>Timezone</label><input id="s_tz" value="'+(esc(s.timezone)||'Asia/Karachi')+'"></div>'+
+      '</div>'+
+      '<button class="btn" style="margin-top:16px" onclick="saveSchedule()">Save schedule</button>'+
+      '<p class="muted" style="margin-top:12px">Next run: '+(s.next_run_at?fmtDate(s.next_run_at):'—')+' · Last run: '+(s.last_run_at?fmtDate(s.last_run_at):'never')+'</p>'+
+    '</div></div>';
+}
+async function saveSchedule(){
+  await api('/schedule',{method:'PUT',body:JSON.stringify({
+    enabled:val('s_en')==='true', frequency:val('s_freq'), at_time:val('s_time'),
+    day_of_week:parseInt(val('s_dow')||'0'), interval_hours:parseInt(val('s_int')||'24'),
+    countries:val('s_c')||'ALL', timezone:val('s_tz')})});
+  toast('Schedule saved','ok'); viewSchedule();
+}
+
+// ============ chatbot ============
+function toggleChat(){ const c=document.getElementById('chat'); c.classList.toggle('hidden');
+  if(!c.classList.contains('hidden')){ if(!document.getElementById('chatBody').children.length)
+    addMsg('bot',"Hi! Ask me about any university — criteria, fees, deadlines, status, links."); document.getElementById('chatInput').focus(); } }
+function addMsg(who,text){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
+  const b=document.getElementById('chatBody'); b.appendChild(d); b.scrollTop=b.scrollHeight; }
+async function sendChat(e){ e.preventDefault(); const i=document.getElementById('chatInput'); const q=i.value.trim(); if(!q)return;
+  addMsg('me',q); i.value=''; try{ const r=await api('/chat',{method:'POST',body:JSON.stringify({message:q})}); addMsg('bot',r.answer); }
+  catch(err){ addMsg('bot','Sorry — '+err.message); } }
+
+// ============ modal / util ============
+function openModal(title, body, onSave){
+  const m=document.getElementById('modal'); m.classList.remove('hidden');
+  m.innerHTML='<div class="modal-card"><div class="modal-h">'+esc(title)+'<button class="ico-btn" style="border:none" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-b">'+body+'</div>'+
+    '<div class="modal-f"><button class="btn ghost" onclick="closeModal()">Cancel</button>'+
+      '<button class="btn" id="modalSave">Save</button></div></div>';
+  document.getElementById('modalSave').onclick=async function(){ try{ await onSave(); }catch(err){ toast(err.message,'bad'); } };
+}
+function closeModal(){ const m=document.getElementById('modal'); m.classList.add('hidden'); m.innerHTML=''; }
+function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
+function fmtDate(s){ if(!s)return''; const d=new Date(s); return d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+
+// icons
+function icoEdit(){return'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';}
+function icoTrash(){return'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';}
+function icoPlus(){return'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';}
+function icoPlay(){return'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';}
+function icoEye(){return'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';}
+
+// ============ init ============
+(function(){
+  const t=tok(); const me=localStorage.getItem('ar_me');
+  if(t && me){ S.token=t; S.me=JSON.parse(me); boot().catch(function(){showLogin();}); }
+  else showLogin();
+})();
+</script>
+</body>
+</html>

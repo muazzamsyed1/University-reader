@@ -47,8 +47,35 @@ async def init_db() -> None:
 
     async with AsyncSessionLocal() as session:
         count = (await session.execute(select(func.count()).select_from(Country))).scalar_one()
-        if count == 0:
-            logger.warning(
-                "Database has no countries. Build it with:  python database/rebuild.py")
-        else:
-            logger.info("Database ready: %s countries present.", count)
+
+    if count == 0:
+        # Empty DB (e.g. a fresh cloud deploy): auto-load from the Excel sheets if present.
+        await _auto_import()
+    else:
+        logger.info("Database ready: %s countries present.", count)
+
+
+async def _auto_import() -> None:
+    """Populate an empty database from the Excel sheets in EXCEL_DIR, once.
+    Safe no-op when the folder has no sheets or import is disabled."""
+    import glob
+    import os
+
+    if not getattr(settings, "AUTO_IMPORT_ON_EMPTY", True):
+        logger.warning("Database empty and AUTO_IMPORT_ON_EMPTY is off — "
+                       "build it with: python database/rebuild.py")
+        return
+    folder = settings.EXCEL_DIR
+    sheets = glob.glob(os.path.join(folder, "*.xlsx")) if folder and os.path.isdir(folder) else []
+    if not sheets:
+        logger.warning("Database empty and no Excel sheets found in %s — "
+                       "add universities via the dashboard or run the rebuild.", folder)
+        return
+    try:
+        from app.modules.countries.excel_import import import_all
+        async with AsyncSessionLocal() as db:
+            res = await import_all(db, folder=folder, wipe=False)
+        logger.info("Auto-imported data: %s countries, %s universities, %s programmes.",
+                    res.get("countries"), res.get("universities"), res.get("programs"))
+    except Exception as exc:                       # never block startup
+        logger.error("Auto-import failed (%s); start with an empty DB and import later.", exc)

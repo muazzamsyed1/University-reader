@@ -36,6 +36,8 @@ class Settings(BaseSettings):
 
     # ── Excel source workbooks (for re-sync) ─────────────────────
     EXCEL_DIR: str = str(_PROJECT_ROOT / "countriesEXCELsheetsData")
+    # On a fresh/empty database (e.g. first cloud deploy), auto-load from EXCEL_DIR.
+    AUTO_IMPORT_ON_EMPTY: bool = True
 
     # ── Security / authentication ────────────────────────────────
     # SECRET_KEY signs login tokens AND derives the key that encrypts stored

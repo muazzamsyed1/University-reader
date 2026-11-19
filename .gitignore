@@ -28,8 +28,17 @@ service-account*.json
 .claude/
 *.local
 
-# Countries Excel / data sheets
-countriesEXCELsheetsData/*.xlsx
+# Build / export artifacts
+*.zip
+
+# Private source workbooks — these contain student personal data (names, emails,
+# phone numbers, passwords). NEVER commit anything from here.
+countriesEXCELsheetsData/private/
+*student*.xlsx
+*Student*.xlsx
+*clients*.xlsx
+
+# Countries Excel / data sheets (publishable catalogues are force-added, see README)
 countriesEXCELsheetsData/*.xls
 countriesEXCELsheetsData/*.csv
 countriesEXCELsheetsData/.env

@@ -344,6 +344,47 @@ class VerifyExcelOut(BaseModel):
     message: str
 
 
+class ExploreIn(BaseModel):
+    university: str
+    country_code: str = ""
+    program: str = ""
+    degree_level: str = "MASTER"
+    url: str | None = None
+
+
+class ExploreOut(BaseModel):
+    ok: bool = False
+    university: str = ""
+    program: str = ""
+    degree_level: str = "MASTER"
+    country_code: str = ""
+    url: str = ""
+    discovered: bool = False
+    page_title: str | None = None
+    followed_url: str | None = None
+    http_status: int | None = None
+    text_chars: int = 0
+    used_ai: bool = False
+    criteria: dict = {}
+    already_exists: bool = False
+    existing_university_id: str | None = None
+    message: str = ""
+
+
+class ExploreSaveIn(BaseModel):
+    university: str
+    country_code: str
+    country_name: str | None = None
+    program: str = ""
+    degree_level: str = "MASTER"
+    university_type: str | None = None
+    city: str | None = None
+    website: str | None = None
+    url: str | None = None
+    criteria: dict = {}
+    requirements_text: str | None = None
+
+
 class VerifyReadUrlIn(BaseModel):
     url: str
     program_id: str | None = None

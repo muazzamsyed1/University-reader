@@ -10,6 +10,7 @@ from app.modules.countries import chatbot, keystore, reader, repository as repo,
 from app.modules.countries.schemas import (
     ApiKeyIn, ApiKeyOut, BrokenLinkOut, ChangeOut, ChangeReview, ChatIn, ChatOut,
     CountryOut, LinkIn, LinkUpdate, OpResult, ProgramIn, ProgramOut, ProgramUpdate,
+    ExploreIn, ExploreOut, ExploreSaveIn,
     ProgramWithUniversity, ReadUniversityOut, ReaderRunOut, ReaderRunResult, RunCompareOut,
     ScheduleIn, ScheduleOut, StatsOut, UniversityDetail, UniversityIn, UniversityOut,
     UniversityUpdate, VerifyExcelOut, VerifyReadUrlIn, VerifyReadUrlOut,
@@ -348,6 +349,25 @@ async def resolve_link(link_id: str, admin: CurrentAdmin = Depends(get_current_a
 async def verify_excel(_: CurrentAdmin = Depends(get_current_admin),
                        db: AsyncSession = Depends(get_db)):
     return await verify.verify_excel(db)
+
+
+@router.post("/verify/explore", response_model=ExploreOut)
+async def verify_explore(payload: ExploreIn, admin: CurrentAdmin = Depends(get_current_admin),
+                         db: AsyncSession = Depends(get_db)):
+    """Read a university/programme that may not be stored yet. If no link is given,
+    the official page is found from the university name. Nothing is saved."""
+    return await repo.explore_university(
+        db, university=payload.university, country_code=payload.country_code,
+        program=payload.program, degree_level=payload.degree_level,
+        url=payload.url, scope=_scope(admin))
+
+
+@router.post("/verify/explore/save", response_model=OpResult)
+async def verify_explore_save(payload: ExploreSaveIn,
+                              admin: CurrentAdmin = Depends(get_current_admin),
+                              db: AsyncSession = Depends(get_db)):
+    """Store the university + programme that was just read."""
+    return await repo.save_explored(db, payload.model_dump(), scope=_scope(admin))
 
 
 @router.post("/verify/read-url", response_model=VerifyReadUrlOut)

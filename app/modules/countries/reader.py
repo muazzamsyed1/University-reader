@@ -418,6 +418,50 @@ async def run_reader(db: AsyncSession, countries: list[str] | None = None,
             "used_ai": bool(cfg), "discovered": discovered, "message": run.message}
 
 
+async def discover_and_read(db: AsyncSession, university: str, program: str = "",
+                            country: str = "", url: str | None = None,
+                            timeout: float = 30.0) -> dict:
+    """Read a university/programme that may not be in the database yet.
+
+    When no URL is given, the official page is located from the university name
+    (AI first, then a web search), then its admission criteria are read.
+    """
+    cfg = await keystore.get_active_config(db)
+    async with httpx.AsyncClient(timeout=timeout, headers=_HEADERS, verify=False,
+                                 follow_redirects=True) as client:
+        used = (url or "").strip()
+        discovered = False
+        if not used:
+            used = await _discover_link(client, cfg, program, university, country) or ""
+            discovered = bool(used)
+        if not used:
+            return {"ok": False, "url": "", "discovered": False, "criteria": {},
+                    "page_title": "", "used_ai": bool(cfg), "http_status": None,
+                    "text_chars": 0, "followed_url": None,
+                    "message": "Could not find a web page for that university. "
+                               "Please paste the university/programme link and try again."}
+        (status, ok, _ch, clen, text, title, _raw), criteria = await _read_page(
+            client, cfg, used, program_name=program, university=university, deep=True)
+
+    if not ok:
+        return {"ok": False, "url": used, "discovered": discovered, "criteria": {},
+                "page_title": "", "used_ai": bool(cfg), "http_status": status,
+                "text_chars": 0, "followed_url": None,
+                "message": f"Could not open {used} (status {status or 'unreachable'})."}
+    criteria = criteria or {}
+    followed = criteria.pop("_followed", None)
+    page_title = criteria.pop("_page_title", title)
+    criteria.pop("_excerpt", None)
+    found = sum(1 for k in ai_extract.CRITERIA_KEYS if criteria.get(k))
+    engine = "AI" if cfg else "regex"
+    return {"ok": True, "url": used, "discovered": discovered, "criteria": criteria,
+            "page_title": page_title, "used_ai": bool(cfg), "http_status": status,
+            "text_chars": clen or len(text), "followed_url": followed,
+            "message": (f"Read '{page_title or used}' ({engine})"
+                        + (" — link found automatically" if discovered else "")
+                        + f"; {found} criterion/criteria found.")}
+
+
 async def read_criteria_from_url(db: AsyncSession, url: str, program_name: str = "",
                                  university: str = "", timeout: float = 25.0) -> dict:
     """Read one URL now and return the criteria found (used by manual verify).

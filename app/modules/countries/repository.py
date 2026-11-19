@@ -655,6 +655,106 @@ async def read_and_compare(db: AsyncSession, url: str, program_id: str | None = 
             "university_name": uni.name if uni else None, "message": res["message"]}
 
 
+async def explore_university(db: AsyncSession, university: str, country_code: str = "",
+                             program: str = "", degree_level: str = "MASTER",
+                             url: str | None = None,
+                             scope: list[str] | None = None) -> dict:
+    """Read a university/programme that may not be stored yet, and report what
+    was found. Nothing is written — the admin decides whether to save it."""
+    university = (university or "").strip()
+    if not university:
+        raise HTTPException(422, "Provide the university name.")
+    code = (country_code or "").strip().upper()
+    codes = _scoped_codes(scope)
+    if code and codes is not None and code not in codes:
+        raise HTTPException(403, "You are not assigned to this country.")
+
+    country = await get_country(db, code) if code else None
+    country_name = country.name if country else code
+
+    # is it already stored?
+    existing = None
+    if country is not None:
+        existing = (await db.execute(
+            select(University).where(University.country_id == country.id,
+                                     University.slug == _slug(university)))).scalar_one_or_none()
+    if existing is None:
+        existing = (await db.execute(
+            select(University).where(University.slug == _slug(university)))).scalar_one_or_none()
+
+    res = await reader_engine.discover_and_read(
+        db, university=university, program=program, country=country_name, url=url)
+    res["university"] = university
+    res["program"] = program
+    res["degree_level"] = (degree_level or "MASTER").upper()
+    res["country_code"] = code
+    res["already_exists"] = existing is not None
+    res["existing_university_id"] = existing.id if existing else None
+    if existing is not None:
+        res["message"] += f" (Note: '{existing.name}' is already in the database.)"
+    return res
+
+
+async def save_explored(db: AsyncSession, data: dict,
+                        scope: list[str] | None = None) -> dict:
+    """Store a university + programme that was just read (criteria included)."""
+    name = (data.get("university") or "").strip()
+    code = (data.get("country_code") or "").strip().upper()
+    if not name:
+        raise HTTPException(422, "Provide the university name.")
+    if not code:
+        raise HTTPException(422, "Provide the country.")
+    codes = _scoped_codes(scope)
+    if codes is not None and code not in codes:
+        raise HTTPException(403, "You are not assigned to this country.")
+
+    country = await get_country(db, code)
+    if country is None:
+        cname = (data.get("country_name") or "").strip() or code
+        country = Country(name=cname, code=code, slug=_slug(cname))
+        db.add(country)
+        await db.flush()
+
+    uslug = _slug(name)
+    uni = (await db.execute(
+        select(University).where(University.country_id == country.id,
+                                 University.slug == uslug))).scalar_one_or_none()
+    created_uni = False
+    if uni is None:
+        uni = University(country_id=country.id, name=name, slug=uslug,
+                         city=(data.get("city") or None),
+                         type=(data.get("university_type") or None),
+                         website=(data.get("website") or None), origin="manual")
+        db.add(uni)
+        await db.flush()
+        created_uni = True
+    else:
+        if data.get("city") and not uni.city:
+            uni.city = data["city"]
+        if data.get("university_type") and not uni.type:
+            uni.type = data["university_type"]
+
+    crit = data.get("criteria") or {}
+    prog_payload = {
+        "name": (data.get("program") or "").strip() or "(unnamed programme)",
+        "degree_level": (data.get("degree_level") or "MASTER").upper(),
+        "apply_link": data.get("url") or None,
+        "status": crit.get("status") if crit.get("status") != "UNKNOWN" else None,
+        "application_opening_date": crit.get("application_opening_date"),
+        "deadline": crit.get("deadline"),
+        "apply_fee": crit.get("apply_fee"),
+        "cgpa_required": crit.get("cgpa_required"),
+        "english_required": crit.get("english_required"),
+        "requirements_text": data.get("requirements_text") or None,
+        "notes": f"Read from {data.get('url') or 'the web'}" if data.get("url") else None,
+    }
+    prog = await _add_program(db, uni, country.id, prog_payload)
+    await db.commit()
+    return {"ok": True, "university_id": uni.id, "program_id": prog.id,
+            "message": (("University created" if created_uni else "Added to existing university")
+                        + f" — '{prog.name}' saved with the criteria that were read.")}
+
+
 async def read_university_now(db: AsyncSession, university_id: str,
                               scope: list[str] | None = None) -> dict:
     """Read every link of ONE university right now (fast) and return the

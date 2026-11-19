@@ -26,6 +26,29 @@ _FEE_RE = re.compile(r"(€|£|\$|EUR|EURO|USD|GBP|CZK|K[Čc])?\s*([\d][\d.,\s]*
                      r"(€|£|\$|EUR|EURO|USD|GBP|CZK|K[Čc])?", re.IGNORECASE)
 
 
+def _norm_status(raw: str) -> str | None:
+    """Map a free-text status from a sheet onto OPEN / CLOSE (column is short).
+    Anything unclear returns None; the original wording is kept in notes."""
+    s = (raw or "").strip().lower()
+    if not s:
+        return None
+    if "not open" in s or "not yet" in s or "opens " in s:
+        return "CLOSE"                      # announced but not open yet
+    if "clos" in s:
+        return "CLOSE"
+    if "open" in s:
+        return "OPEN"
+    return None
+
+
+def _cut(value: str | None, limit: int) -> str | None:
+    """Defensively trim a value to its column size."""
+    if value is None:
+        return None
+    v = str(value).strip()
+    return (v[:limit] or None) if v else None
+
+
 def _slug(text: str) -> str:
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
@@ -126,36 +149,53 @@ async def _insert_records(db: AsyncSession, records: list) -> dict:
         uni = universities.get(ukey)
         if uni is None:
             uni = University(country_id=country.id, name=rec.university, slug=uslug,
-                             website=None, contact=rec.contact or None, origin="excel")
+                             city=rec.university_city or None,
+                             type=rec.university_type or None,
+                             website=rec.university_website or None,
+                             contact=rec.contact or None, origin="excel")
             db.add(uni)
             await db.flush()
             universities[ukey] = uni
-        elif rec.contact and not uni.contact:
-            uni.contact = rec.contact
+        else:
+            # fill in any detail that was blank on the first row of this university
+            if rec.contact and not uni.contact:
+                uni.contact = rec.contact
+            if rec.university_city and not uni.city:
+                uni.city = rec.university_city
+            if rec.university_type and not uni.type:
+                uni.type = rec.university_type
+            if rec.university_website and not uni.website:
+                uni.website = rec.university_website
 
         # ── programme (criteria inline) ──
         fee_amt, fee_cur = _parse_fee(rec.apply_fee)
-        status = (rec.status or "").upper().strip()
-        if status in ("CLOSE", "CLOSED", "CLOSED NOW"):
-            status = "CLOSE"
-        elif status.startswith("OPEN"):
-            status = "OPEN"
+        # always show the currency alongside the amount
+        fee_text = (rec.apply_fee or "").strip()
+        if fee_text and fee_cur and not re.search(r"[€£$₹]|[A-Za-z]{3}", fee_text):
+            fee_text = f"{fee_text} {fee_cur}"
+        status = _norm_status(rec.status)
+        # keep the sheet's exact wording when it says more than OPEN/CLOSE
+        notes_text = rec.notes or ""
+        raw_status = (rec.status or "").strip()
+        if raw_status and raw_status.upper() not in ("OPEN", "CLOSE", "CLOSED"):
+            notes_text = (notes_text + " | " if notes_text else "") + f"Status (as listed): {raw_status}"
         prog = Program(
             university_id=uni.id, country_id=country.id,
-            name=rec.name, degree_level=rec.degree_level,
-            language=rec.language or None,
-            application_opening_date=rec.application_opening_date or None,
-            deadline=rec.deadline or None,
+            name=_cut(rec.name, 600), degree_level=rec.degree_level,
+            language=_cut(rec.language, 200),
+            field=_cut(rec.field, 200),
+            application_opening_date=_cut(rec.application_opening_date, 400),
+            deadline=_cut(rec.deadline, 400),
             apply_link=rec.apply_link or None,
-            portal_name=rec.portal_name or None,
-            apply_fee=rec.apply_fee or None,
-            fee_amount=fee_amt, fee_currency=fee_cur,
+            portal_name=_cut(rec.portal_name, 400),
+            apply_fee=_cut(fee_text, 400),
+            fee_amount=fee_amt, fee_currency=_cut(fee_cur, 10),
             cgpa_required=rec.cgpa_required or None,
-            status=status or None,
+            status=_cut(status, 40),
             english_required=rec.english_required or None,
             requirements_text=rec.requirements_text or None,
-            notes=rec.notes or None,
-            source_sheet=rec.source_sheet, source_row=rec.source_row or None,
+            notes=notes_text or None,
+            source_sheet=_cut(rec.source_sheet, 120), source_row=_cut(rec.source_row, 40),
             origin="excel",
         )
         db.add(prog)

@@ -969,8 +969,21 @@ async function loadChanges(){
 
 // ============ VERIFY ============
 async function viewVerify(){
+  await ensureCountries();
   document.getElementById('main').innerHTML=
-    '<div class="page-head"><div><h2>Verify</h2><div class="sub">Database vs Excel, and read-a-link check</div></div></div>'+
+    '<div class="page-head"><div><h2>Verify</h2><div class="sub">Look up any university, check the database, or read a link</div></div></div>'+
+    '<div class="panel"><div class="panel-h">Look up a university (even one not in the database)</div><div class="panel-b">'+
+      '<div class="grid2">'+
+        '<div style="grid-column:1/3"><label>University name</label><input id="x_uni" placeholder="e.g. Charles University"></div>'+
+        '<div><label>Country</label><select id="x_country">'+countryOptions('')+'</select></div>'+
+        '<div><label>Degree</label><select id="x_deg"><option value="MASTER">Master\'s</option><option value="BACHELOR">Bachelor\'s</option></select></div>'+
+        '<div><label>Programme</label><input id="x_prog" placeholder="e.g. MSc Data Science"></div>'+
+        '<div><label>Type</label><select id="x_type"><option value="">—</option><option value="Public">Public</option><option value="Private">Private</option></select></div>'+
+        '<div style="grid-column:1/3"><label>Link (optional — leave empty and it will be found from the name)</label><input id="x_url" placeholder="https://…"></div>'+
+      '</div>'+
+      '<button class="btn" style="margin-top:12px" onclick="runExplore()">'+icoPlay()+' Read this university</button>'+
+      '<div id="exploreOut" style="margin-top:14px"></div>'+
+    '</div></div>'+
     '<div class="panel"><div class="panel-h">Database vs Excel sheets <button class="btn ghost sm" onclick="runVerifyExcel()">Run check</button></div>'+
       '<div id="verifyExcel" class="panel-b muted">Click “Run check”.</div></div>'+
     '<div class="panel"><div class="panel-h">Read a link now &amp; compare</div><div class="panel-b">'+
@@ -981,6 +994,51 @@ async function viewVerify(){
       '<button class="btn" style="margin-top:12px" onclick="runReadUrl()">'+icoPlay()+' Read &amp; compare</button>'+
       '<div id="readUrlOut" style="margin-top:14px"></div>'+
     '</div></div>';
+}
+let _explored=null;
+async function runExplore(){
+  const uni=val('x_uni'); if(!uni){ toast('Enter the university name','bad'); return; }
+  const out=document.getElementById('exploreOut');
+  out.innerHTML='<div class="panel"><div class="panel-b empty">Looking up “'+esc(uni)+'”… this can take up to a minute.</div></div>';
+  try{
+    const r=await api('/verify/explore',{method:'POST',body:JSON.stringify({
+      university:uni, country_code:val('x_country'), program:val('x_prog'),
+      degree_level:val('x_deg'), url:val('x_url')||null})});
+    _explored=r;
+    if(!r.ok){ out.innerHTML='<div class="panel"><div class="panel-b" style="color:var(--bad)">'+esc(r.message)+'</div></div>'; return; }
+    const keys=['status','application_opening_date','deadline','apply_fee','cgpa_required','english_required'];
+    const labels={status:'Status',application_opening_date:'Application opens',deadline:'Deadline',
+      apply_fee:'Application fee',cgpa_required:'CGPA required',english_required:'English required'};
+    const rows=keys.map(function(k){ return '<tr><td class="muted">'+labels[k]+'</td><td><b>'+
+      (esc(r.criteria[k])||'<span class=muted>not found on the page</span>')+'</b></td></tr>'; }).join('');
+    const exists=r.already_exists
+      ? '<div class="panel-b" style="color:var(--warn)">⚠ This university is already in the database — saving will add this programme to it.</div>' : '';
+    out.innerHTML='<div class="panel"><div class="panel-h">'+
+        '<span><b>'+esc(r.university)+'</b> '+(r.program?('— '+esc(r.program)):'')+' '+degPill(r.degree_level)+'</span>'+
+        '<span class="muted">HTTP '+(r.http_status||'—')+' · '+(r.text_chars||0)+' chars · '+(r.used_ai?'AI':'regex')+'</span></div>'+
+      '<div class="panel-b"><span class="muted">Read from:</span> <a href="'+esc(r.url)+'" target="_blank" rel="noopener">'+esc(trim(r.url,80))+'</a>'+
+        (r.discovered?' <span class="tag">link found automatically</span>':'')+
+        (r.page_title?'<div class="muted">'+esc(r.page_title)+'</div>':'')+'</div>'+
+      exists+
+      '<table><thead><tr><th>Criterion</th><th>Read from the page</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<div class="panel-b"><button class="btn ok" onclick="saveExplored()">'+icoPlus()+' Save to database</button> '+
+        '<button class="btn ghost" onclick="document.getElementById(\'exploreOut\').innerHTML=\'\'">Discard</button></div></div>';
+  }catch(e){ out.innerHTML='<div class="panel"><div class="panel-b" style="color:var(--bad)">'+esc(e.message)+'</div></div>'; }
+}
+async function saveExplored(){
+  if(!_explored){ toast('Nothing to save','bad'); return; }
+  if(!val('x_country')){ toast('Choose the country first','bad'); return; }
+  try{
+    const res=await api('/verify/explore/save',{method:'POST',body:JSON.stringify({
+      university:_explored.university, country_code:val('x_country'),
+      program:_explored.program||val('x_prog'), degree_level:_explored.degree_level,
+      university_type:val('x_type')||null, url:_explored.url,
+      criteria:_explored.criteria||{}})});
+    toast(res.message,'ok');
+    document.getElementById('exploreOut').innerHTML=
+      '<div class="panel"><div class="panel-b" style="color:var(--ok)">✔ '+esc(res.message)+'</div></div>';
+    _explored=null; refreshBadge();
+  }catch(e){ toast(e.message,'bad'); }
 }
 async function runVerifyExcel(){
   const el=document.getElementById('verifyExcel'); el.innerHTML='Checking…';

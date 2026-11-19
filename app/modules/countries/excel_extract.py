@@ -59,6 +59,7 @@ class ProgramRecord:
     name: str
     degree_level: str                 # MASTER / BACHELOR
     language: str = ""
+    field: str = ""
     cgpa_required: str = ""
     english_required: str = ""
     portal_name: str = ""
@@ -71,16 +72,32 @@ class ProgramRecord:
     apply_fee: str = ""
     status: str = ""
     contact: str = ""
+    university_city: str = ""
+    university_type: str = ""
+    university_website: str = ""
     source_sheet: str = ""
     source_row: str = ""
 
 
 def _country_for(path: str, sheet: str) -> tuple[str, str]:
-    hay = f"{os.path.basename(path)} {sheet}".lower()
-    for hint, (name, code) in _COUNTRY_BY_HINT:
-        if hint in hay:
-            return name, code
+    """Identify the country. The SHEET name wins over the file name, so one
+    workbook may hold sheets for several countries."""
+    for hay in (sheet.lower(), os.path.basename(path).lower()):
+        for hint, (name, code) in _COUNTRY_BY_HINT:
+            if hint in hay:
+                return name, code
     return "Unknown", "XX"
+
+
+# Sheets holding personal/student records are never imported (privacy) and are
+# not programme catalogues anyway.
+_PII_HEADERS = ("student name", "password", "passowrd", "email id", "contact no",
+                "counselor", "processor assigned", "refund status")
+
+
+def _is_personal_data_sheet(header_keys: list[str]) -> bool:
+    joined = " | ".join(header_keys)
+    return any(p in joined for p in _PII_HEADERS)
 
 
 class _Row:
@@ -124,20 +141,30 @@ def _parse_sheet(path: str, ws, default_degree: str) -> list[ProgramRecord]:
     hdr = _Row([_clean(c) for c in rows[0]])
     cname, ccode = _country_for(path, ws.title)
 
+    # never import sheets of personal/student records
+    if _is_personal_data_sheet(list(hdr.index.keys())):
+        return []
+
     c_uni = hdr.find("university")
-    c_prog = hdr.find("program track", "master s program", "program", "programme")
-    c_degree = hdr.find("degree level")
+    c_prog = hdr.find("program track", "master s program", "programme", "program")
+    c_degree = hdr.find("degree level", "degree")
     c_lang = hdr.find("teaching language", "language")
+    c_faculty = hdr.find("faculty")
+    c_city = hdr.find("city")
+    c_utype = hdr.find("type")
+    c_subject = hdr.find("field")
+    c_start = hdr.find("study start")
     c_cgpa = hdr.find("required cgpa", "cgpa requirement", "cgpa")
     c_eng = hdr.find("english requirement", "english certificate", "english")
     c_portal = hdr.find("portal name", "portal")
     c_reqs = hdr.find("program specific admission criteria", "program requirements",
                       "group requirements", "admission criteria")
     c_link = hdr.find("official link", "university application link", "application link from",
-                      "application link", "apply link")
+                      "application link", "apply link", "links", "link")
     c_link2 = hdr.find("additional official link", "additional application link")
     c_notes = hdr.find("program notes", "other application information", "notes")
-    c_open = hdr.find("application opening date", "opening date", "admission opening date")
+    c_open = hdr.find("application opening date", "opening date", "admission opening date",
+                      "application opens", "opens")
     c_dead = hdr.find("application deadline", "deadline")
     # "application fee" must win over "tuition fee"; find the application-fee column first
     c_fee = hdr.find("application fee")
@@ -150,17 +177,35 @@ def _parse_sheet(path: str, ws, default_degree: str) -> list[ProgramRecord]:
     # Czech-specific extra columns — folded into requirements/notes so no data is lost
     c_prevdeg = hdr.find("previous degree requirement")
     c_exam = hdr.find("online exam selection details", "online test selection details",
-                      "selection details")
-    c_tuition = hdr.find("tuition fee")
-    c_deadnotes = hdr.find("deadline notes")
+                      "selection details", "exam selection")
+    c_tuition = hdr.find("tuition")
+    c_deadnotes = hdr.find("deadline notes", "deadline note")
+    # the sheet states its own currency, e.g. "Tuition (EUR per year)"
+    sheet_currency = ""
+    for key in hdr.index:
+        m = re.search(r"\b(eur|usd|gbp|czk|chf|pln)\b", key)
+        if m:
+            sheet_currency = m.group(1).upper()
+            break
 
     out: list[ProgramRecord] = []
+    cur_uni = cur_site = ""          # carried from "group header" rows
     for r in rows[1:]:
         if not r:
             continue
         uni = _get(r, c_uni)
         prog = _get(r, c_prog)
-        if not uni and not prog:
+        faculty = _get(r, c_faculty)
+        # Grouped layout: a row that names a university but has no programme is a
+        # header for the rows beneath it (university name may sit in Faculty).
+        if not prog:
+            header_name = uni or faculty
+            if header_name:
+                cur_uni = header_name
+                cur_site = _get(r, c_link)
+            continue
+        uni = uni or cur_uni
+        if not uni:
             continue
         degree = _degree_from(_get(r, c_degree), default_degree)
 
@@ -169,11 +214,20 @@ def _parse_sheet(path: str, ws, default_degree: str) -> list[ProgramRecord]:
                             ("Previous degree: " + _get(r, c_prevdeg)) if _get(r, c_prevdeg) else "",
                             ("Selection / exam: " + _get(r, c_exam)) if _get(r, c_exam) else "")
                 if x]
-        # notes = base notes/deadline-notes + tuition
+        # notes = base notes/deadline-notes + study start + faculty + tuition
         base_notes = _get(r, c_notes) or (_get(r, c_deadnotes) if c_deadnotes != c_notes else "")
         tuition = _get(r, c_tuition)
-        notes = [x for x in (base_notes,
-                             ("Tuition: " + tuition + " EUR/year") if tuition else "") if x]
+        cur = sheet_currency or "EUR"
+        notes = [x for x in (
+            base_notes,
+            ("Faculty: " + faculty) if (faculty and faculty != uni) else "",
+            ("Study start: " + _get(r, c_start)) if _get(r, c_start) else "",
+            (f"Tuition: {tuition} {cur}/year") if tuition else "") if x]
+
+        # application fee — always carry the currency when the sheet states one
+        fee = _get(r, c_fee)
+        if fee and sheet_currency and not re.search(r"[€£$]|[A-Za-z]{3}", fee):
+            fee = f"{fee} {sheet_currency}"
 
         out.append(ProgramRecord(
             country_name=cname, country_code=ccode,
@@ -181,6 +235,7 @@ def _parse_sheet(path: str, ws, default_degree: str) -> list[ProgramRecord]:
             name=prog or "(unnamed programme)",
             degree_level=degree,
             language=_get(r, c_lang),
+            field=_get(r, c_subject),
             cgpa_required=_get(r, c_cgpa),
             english_required=_get(r, c_eng),
             portal_name=_get(r, c_portal),
@@ -190,9 +245,12 @@ def _parse_sheet(path: str, ws, default_degree: str) -> list[ProgramRecord]:
             notes=" | ".join(notes),
             application_opening_date=_get(r, c_open),
             deadline=_get(r, c_dead),
-            apply_fee=_get(r, c_fee),
+            apply_fee=fee,
             status=_get(r, c_status),
             contact=_get(r, c_contact),
+            university_city=_get(r, c_city),
+            university_type=_get(r, c_utype),
+            university_website=cur_site,
             source_sheet=f"{os.path.basename(path)} :: {ws.title}",
             source_row=_get(r, c_srow),
         ))

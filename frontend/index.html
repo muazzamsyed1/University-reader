@@ -134,9 +134,12 @@
   /* ---- Chatbot ---- */
   #chatBtn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;
            background:var(--accent);color:#fff;border:none;box-shadow:var(--shadow);z-index:60;
-           display:flex;align-items:center;justify-content:center}
-  #chatBtn:hover{background:var(--accent-ink)}
-  #chatBtn svg{width:24px;height:24px}
+           display:flex;align-items:center;justify-content:center;cursor:pointer;
+           transition:transform .18s ease, background .18s ease, box-shadow .18s ease}
+  #chatBtn:hover{background:var(--accent-ink);transform:translateY(-2px);
+                 box-shadow:0 14px 32px rgba(47,107,255,.45)}
+  #chatBtn:active{transform:translateY(0)}
+  #chatBtn svg{width:26px;height:26px}
   #chat{position:fixed;right:20px;bottom:88px;width:360px;max-width:calc(100vw - 40px);height:460px;
         background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);
         z-index:60;display:flex;flex-direction:column;overflow:hidden}
@@ -224,7 +227,7 @@
 
 <!-- chatbot -->
 <button id="chatBtn" class="hidden" onclick="toggleChat()" title="Ask the assistant">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.25c-5.1 0-9.25 3.47-9.25 7.75 0 2.4 1.31 4.55 3.36 5.98-.13.92-.5 2.08-1.42 3.12-.3.34-.02.88.43.8 1.96-.34 3.4-1.13 4.29-1.74.84.17 1.71.26 2.59.26 5.1 0 9.25-3.47 9.25-7.75S17.1 3.25 12 3.25Z" fill="currentColor"/><circle cx="8.4" cy="11" r="1.15" fill="#fff"/><circle cx="12" cy="11" r="1.15" fill="#fff"/><circle cx="15.6" cy="11" r="1.15" fill="#fff"/></svg>
 </button>
 <div id="chat" class="hidden">
   <div class="chat-h"><span>Admissions Assistant</span><button class="ico-btn" style="background:none;border:none;color:#fff" onclick="toggleChat()">&times;</button></div>

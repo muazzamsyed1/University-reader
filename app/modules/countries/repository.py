@@ -197,6 +197,8 @@ async def search_programs(db: AsyncSession, country_code: str | None = None,
         d["links"] = p.links
         d["university_id"] = u.id
         d["university_name"] = u.name
+        d["university_city"] = u.city
+        d["university_type"] = u.type
         d["country_code"] = c.code
         d["country_name"] = c.name
         out.append(d)

@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.modules.auth.deps import CurrentAdmin, get_current_admin, require_super_admin
-from app.modules.countries import chatbot, keystore, reader, repository as repo, scheduler, verify
+from app.modules.countries import (chatbot, excel_export, keystore, reader,
+                                   repository as repo, scheduler, verify)
 from app.modules.countries.schemas import (
     ApiKeyIn, ApiKeyOut, BrokenLinkOut, ChangeOut, ChangeReview, ChatIn, ChatOut,
     CountryOut, LinkIn, LinkUpdate, OpResult, ProgramIn, ProgramOut, ProgramUpdate,
@@ -349,6 +351,55 @@ async def resolve_link(link_id: str, admin: CurrentAdmin = Depends(get_current_a
 async def verify_excel(_: CurrentAdmin = Depends(get_current_admin),
                        db: AsyncSession = Depends(get_db)):
     return await verify.verify_excel(db)
+
+
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _xlsx(data: bytes, filename: str) -> Response:
+    return Response(content=data, media_type=XLSX_MIME, headers={
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Length": str(len(data)),
+    })
+
+
+def _safe_name(text: str) -> str:
+    keep = [ch if (ch.isalnum() or ch in "-_") else "-" for ch in (text or "data")]
+    return "".join(keep).strip("-") or "data"
+
+
+@router.get("/export/programs.xlsx", include_in_schema=False)
+async def export_programs(
+    country: str | None = Query(None, description="country code, e.g. CZ"),
+    degree: str | None = Query(None),
+    status: str | None = Query(None),
+    q: str | None = Query(None),
+    admin: CurrentAdmin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download the stored programmes (optionally for one country) as Excel."""
+    if country:
+        _assert_access(admin, country.upper())
+    rows = await repo.search_programs(db, country_code=country, degree=degree,
+                                      status=status, q=q, limit=20000,
+                                      scope=_scope(admin))
+    label = "All countries"
+    if country:
+        c = await repo.get_country(db, country)
+        label = c.name if c else country.upper()
+    data = excel_export.programmes_workbook(rows, label)
+    return _xlsx(data, f"programmes-{_safe_name(label)}.xlsx")
+
+
+@router.get("/export/run/{run_id}.xlsx", include_in_schema=False)
+async def export_run(run_id: str, admin: CurrentAdmin = Depends(get_current_admin),
+                     db: AsyncSession = Depends(get_db)):
+    """Download what a reader run read vs what is stored, as Excel."""
+    compare = await repo.run_compare(db, run_id, scope=_scope(admin))
+    runs = await repo.list_runs(db, limit=100)
+    label = next((r.countries or "ALL" for r in runs if r.id == run_id), "ALL")
+    data = excel_export.run_workbook(compare, label)
+    return _xlsx(data, f"reader-{_safe_name(label)}-{run_id[:8]}.xlsx")
 
 
 @router.post("/verify/explore", response_model=ExploreOut)

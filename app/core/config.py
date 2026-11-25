@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -19,6 +19,21 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8",
         case_sensitive=False, extra="ignore",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ignore_blank_values(cls, data):
+        """Treat a variable that is set but empty as "not set".
+
+        Hosting dashboards (Railway, Vercel, Render) happily save a variable
+        with a blank value. Without this, a stray blank ACCESS_TOKEN_EXPIRE_MINUTES
+        or AUTO_IMPORT_ON_EMPTY crashes the app at startup instead of simply
+        falling back to the default defined below.
+        """
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items()
+                    if not (isinstance(v, str) and v.strip() == "")}
+        return data
 
     # ── Application ──────────────────────────────────────────────
     APP_NAME: str = "University Requirement Reader"

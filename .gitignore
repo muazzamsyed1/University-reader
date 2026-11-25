@@ -52,6 +52,8 @@ countriesEXCELsheetsData/.env
 
 # PostgreSQL dump / backup files
 *.sql
+# ...but the catalogue snapshot (no admin accounts, no API keys) is shareable
+!database/study_abroad_data.sql
 *.dump
 *.pgdump
 *.backup
